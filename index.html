@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="スマートフォンのマイクで室内の残響時間（RT60）を測定できるWebアプリケーション">
+  <title>ReverbMeter - 残響測定アプリ</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <!-- App CSS -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <div class="header-content">
+      <h1 class="app-title">
+        <span class="icon">📐</span>
+        ReverbMeter
+      </h1>
+      <div class="header-actions">
+        <button id="helpBtn" class="help-btn" title="使い方" aria-label="使い方">❓</button>
+        <button id="themeToggle" class="theme-toggle" title="テーマ切替" aria-label="テーマ切替">🌙</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Tab Navigation ===== -->
+  <nav class="tab-nav" role="tablist">
+    <button class="tab-btn active" data-tab="measure" role="tab" aria-selected="true">
+      🎤 <span>測定</span>
+    </button>
+    <button class="tab-btn" data-tab="results" role="tab" aria-selected="false">
+      📊 <span>結果</span>
+    </button>
+    <button class="tab-btn" data-tab="data" role="tab" aria-selected="false">
+      💾 <span>データ</span>
+    </button>
+  </nav>
+
+  <!-- ===== Main Content ===== -->
+  <main class="main-content">
+
+    <!-- ==============================
+         測定タブ
+         ============================== -->
+    <section id="measure" class="tab-panel active" role="tabpanel">
+
+      <!-- 測定モード選択 -->
+      <div class="card">
+        <div class="card-title">⚙️ 測定モード</div>
+        <div class="mode-selector">
+          <button class="mode-btn active" data-mode="impulse">
+            <span class="mode-icon">👏</span>
+            インパルス応答
+          </button>
+          <button class="mode-btn" data-mode="sweep">
+            <span class="mode-icon">📡</span>
+            スイープ信号
+          </button>
+        </div>
+
+        <!-- スイープ信号設定 -->
+        <div id="sweepSettings" class="sweep-settings">
+          <div class="setting-row">
+            <span class="setting-label">信号タイプ</span>
+            <span class="setting-value">ログスイープ</span>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">周波数範囲</span>
+            <span class="setting-value">20Hz - 20kHz</span>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">持続時間</span>
+            <span class="setting-value">3秒</span>
+          </div>
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
+            ⚠️ スイープ信号はスピーカーから再生されます。音量にご注意ください。
+          </p>
+        </div>
+      </div>
+
+      <!-- 音圧レベルメーター -->
+      <div class="card">
+        <div class="card-title">📶 音圧レベル</div>
+        <div class="level-meter-container">
+          <div class="level-value" id="levelValue">--</div>
+          <div class="level-unit">dBFS</div>
+          <div class="level-meter">
+            <div class="level-meter-fill" id="levelFill"></div>
+          </div>
+          <div class="level-meter-labels">
+            <span>-60 dB</span>
+            <span>-40 dB</span>
+            <span>-20 dB</span>
+            <span>0 dB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 測定ボタン -->
+      <div class="card">
+        <div class="measure-btn-container">
+          <button id="measureBtn" class="measure-btn" aria-label="測定開始">
+            <span class="btn-icon">🎤</span>
+            <span class="btn-text">開始</span>
+          </button>
+          <div class="measure-status" id="measureStatus">
+            マイクボタンを押して測定を開始
+          </div>
+        </div>
+
+        <!-- 波形表示 -->
+        <div class="waveform-container">
+          <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==============================
+         結果タブ
+         ============================== -->
+    <section id="results" class="tab-panel" role="tabpanel">
+
+      <!-- プレースホルダー -->
+      <div id="resultPlaceholder" class="no-results">
+        <div class="placeholder-icon">📊</div>
+        <p>測定結果がまだありません</p>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
+          測定タブで計測を実行してください
+        </p>
+      </div>
+
+      <!-- 結果コンテンツ -->
+      <div id="resultContent" style="display:none;">
+
+        <!-- RT60サマリー -->
+        <div class="card">
+          <div class="card-title">🎯 測定結果サマリー</div>
+          <div class="rt60-summary">
+            <div class="rt60-item highlight">
+              <div class="rt60-label">RT60 (全帯域)</div>
+              <div class="rt60-value" id="rt60Value">--<span class="unit">秒</span></div>
+            </div>
+            <div class="rt60-item">
+              <div class="rt60-label">EDT</div>
+              <div class="rt60-value" id="edtValue">--<span class="unit">秒</span></div>
+            </div>
+            <div class="rt60-item">
+              <div class="rt60-label">適合度 R²</div>
+              <div class="rt60-value" id="r2Value">--<span class="unit">%</span></div>
+            </div>
+            <div class="rt60-item">
+              <div class="rt60-label">有効性</div>
+              <div class="rt60-value" id="validValue" style="font-size:1rem;">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EDCグラフ -->
+        <div class="card">
+          <div class="card-title">📉 エネルギー減衰曲線 (EDC)</div>
+          <div class="chart-container">
+            <canvas id="edcChart"></canvas>
+          </div>
+        </div>
+
+        <!-- バンドRT60グラフ -->
+        <div class="card">
+          <div class="card-title">📊 周波数帯別 RT60</div>
+          <div class="chart-container">
+            <canvas id="bandChart"></canvas>
+          </div>
+        </div>
+
+        <!-- 保存フォーム -->
+        <div class="card">
+          <div class="card-title">💾 測定結果を保存</div>
+          <div class="save-form">
+            <input type="text" id="saveName" class="save-input" placeholder="測定名を入力 (例: リビング)" maxlength="50">
+            <button id="saveBtn" class="btn btn-primary">保存</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==============================
+         データ管理タブ
+         ============================== -->
+    <section id="data" class="tab-panel" role="tabpanel">
+      <div class="card">
+        <div class="card-title">📁 保存データ <span id="dataCount" style="font-weight:400; color:var(--text-muted); margin-left:8px;">0件</span></div>
+
+        <!-- ツールバー -->
+        <div class="data-toolbar">
+          <div class="data-toolbar-left">
+            <label class="select-all-label">
+              <input type="checkbox" id="selectAll" aria-label="全選択">
+              すべて選択
+            </label>
+          </div>
+          <div class="data-toolbar-right">
+            <button id="exportCsvBtn" class="btn btn-outline btn-sm">📄 CSV</button>
+            <button id="exportJsonBtn" class="btn btn-outline btn-sm">📋 JSON</button>
+            <button id="deleteSelectedBtn" class="btn btn-danger btn-sm">🗑️ 削除</button>
+          </div>
+        </div>
+
+        <!-- データリスト -->
+        <ul id="dataList" class="data-list"></ul>
+
+        <!-- 空の状態 -->
+        <div id="dataEmpty" class="data-empty">
+          <div class="empty-icon">📂</div>
+          <p>保存されたデータはありません</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== ヘルプモーダル ===== -->
+  <div id="helpModal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">📐 ReverbMeter の使い方</h2>
+        <button class="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <h3>🎯 残響時間（RT60）とは？</h3>
+        <p>
+          音源が停止してから音圧レベルが60dB低下するまでの時間です。
+          室内の音響特性を表す基本的な指標で、部屋の大きさや素材によって変わります。
+        </p>
+
+        <h3>👏 インパルス応答方式</h3>
+        <p>
+          手拍子や風船割りなどの短い衝撃音を使って測定します。
+        </p>
+        <ul>
+          <li>「開始」ボタンをタップ</li>
+          <li>マイクへのアクセスを許可</li>
+          <li>画面が「待機中」になったら、手拍子を1回鳴らす</li>
+          <li>自動的に録音・解析が行われます</li>
+        </ul>
+
+        <h3>📡 スイープ信号方式</h3>
+        <p>
+          スピーカーからスイープ信号を再生し、その応答をマイクで録音して解析します。よりを得られますが、スピーカーが必要です。
+        </p>
+        <ul>
+          <li>「スイープ信号」モードを選択</li>
+          <li>「開始」ボタンをタップ</li>
+          <li>スピーカーから信号が再生されます</li>
+          <li>自動的に録音・解析が行われます</li>
+        </ul>
+
+        <h3>💡 より正確な結果を得るコツ</h3>
+        <ul>
+          <li>できるだけ静かな環境で測定する</li>
+          <li>マイクから1〜2m離れた位置で音を鳴らす</li>
+          <li>手拍子は1回だけ、はっきりと鳴らす</li>
+          <li>エアコンや換気扇などの背景騒音を止める</li>
+          <li>複数回測定して平均をとると安定した結果が得られます</li>
+        </ul>
+
+        <h3>📊 結果の見方</h3>
+        <ul>
+          <li><strong>RT60</strong>: 残響時間（秒）。一般的な部屋は0.3〜1.0秒</li>
+          <li><strong>EDT</strong>: 初期減衰時間。体感的な残響感を示します</li>
+          <li><strong>R²</strong>: 近似精度。90%以上で信頼できる結果</li>
+          <li><strong>周波数帯別</strong>: 低音から高音まで帯域ごとのRT60</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== トースト ===== -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- ===== Scripts ===== -->
+  <script src="js/audio-utils.js"></script>
+  <script src="js/measurement.js"></script>
+  <script src="js/visualization.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
