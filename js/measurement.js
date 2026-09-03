@@ -1,6 +1,6 @@
 /**
  * measurement.js - 測定エンジン
- * マイク入力、インパルス応答録音、スイープ信号測定
+ * マイク入力、インパルス応答録音、ピンクTSP測定
  */
 
 const Measurement = (() => {
@@ -13,7 +13,8 @@ const Measurement = (() => {
     let isMeasuring = false;
     let recordedChunks = [];
     let recordedSamples = [];
-    let measurementMode = 'impulse'; // 'impulse' or 'sweep'
+    let measurementMode = 'impulse'; // 'impulse' or 'tsp'
+    let lastTsp = null;              // 直近に生成したピンクTSP (逆フィルタを保持)
     let levelCallback = null;
     let statusCallback = null;
     let waveformCallback = null;
@@ -163,9 +164,8 @@ const Measurement = (() => {
             if (statusCallback) statusCallback('waiting');
 
             scriptNode.onaudioprocess = (e) => {
+                // 出力は無音のまま (マイク入力をスピーカーへ返すと自分の音を再録音してしまう)
                 const inputData = e.inputBuffer.getChannelData(0);
-                const output = e.outputBuffer.getChannelData(0);
-                output.set(inputData);
 
                 if (!isMeasuring) return;
 
@@ -263,12 +263,17 @@ const Measurement = (() => {
     }
 
     /**
-     * スイープ信号方式の測定を開始
+     * ピンクTSP方式の測定を開始
+     * TSPを (同期加算回数 + 2) 周期くり返し再生し、定常状態の周期を同期加算してから
+     * 逆フィルタでデコンボリューションしてインパルス応答を得る。
+     * 先頭1周期を捨てることで、再生と録音のレイテンシが未知でも整合がとれる。
+     * @param {object} options - PinkTSP.DEFAULTS を上書きするパラメータ
+     * @returns {Promise<object>} 解析結果
      */
-    async function startSweepMeasurement(sweepDuration = 3) {
+    async function startPinkTspMeasurement(options = {}) {
         if (!audioCtx || !sourceNode) {
             const success = await initMicrophone();
-            if (!success) return null;
+            if (!success) throw new Error('マイクを初期化できませんでした');
         }
 
         // AudioContextが suspended の場合は resume
@@ -276,80 +281,120 @@ const Measurement = (() => {
             await audioCtx.resume();
         }
 
-        if (statusCallback) statusCallback('sweep-playing');
+        const sampleRate = audioCtx.sampleRate;
+        const tsp = PinkTSP.generate(sampleRate, options);
+        lastTsp = tsp;
 
-        return new Promise((resolve) => {
-            const sampleRate = audioCtx.sampleRate;
+        // 解析に必要な録音長 = (同期加算回数 + 1) 周期
+        const requiredSamples = (tsp.params.averages + 1) * tsp.length;
+        // 再生はさらに1周期多くして、レイテンシで末尾が欠けないようにする
+        const playRepeats = tsp.params.averages + 2;
 
-            // スイープ信号を生成・再生
-            const sweepSignal = AudioUtils.generateLogSweep(sampleRate, sweepDuration);
-            const sweepBuffer = audioCtx.createBuffer(1, sweepSignal.length, sampleRate);
-            sweepBuffer.getChannelData(0).set(sweepSignal);
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            let timeoutId = null;
+            const recordBuffer = new Float32Array(requiredSamples);
+            let writeIndex = 0;
 
-            const sweepSource = audioCtx.createBufferSource();
-            sweepSource.buffer = sweepBuffer;
+            const playBuffer = audioCtx.createBuffer(1, playRepeats * tsp.length, sampleRate);
+            const playData = playBuffer.getChannelData(0);
+            for (let r = 0; r < playRepeats; r++) {
+                playData.set(tsp.signal, r * tsp.length);
+            }
 
-            // ゲインを少し下げて再生
+            const tspSource = audioCtx.createBufferSource();
+            tspSource.buffer = playBuffer;
+
             const gainNode = audioCtx.createGain();
-            gainNode.gain.value = 0.5;
-            sweepSource.connect(gainNode);
+            gainNode.gain.value = tsp.params.playbackGain;
+            tspSource.connect(gainNode);
             gainNode.connect(audioCtx.destination);
 
-            // 同時に録音開始
-            recordedSamples = [];
             isMeasuring = true;
             isRecording = true;
 
             const bufferSize = 4096;
             scriptNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
 
-            scriptNode.onaudioprocess = (e) => {
-                const inputData = e.inputBuffer.getChannelData(0);
-                const output = e.outputBuffer.getChannelData(0);
-                output.set(inputData);
+            function cleanup() {
+                isRecording = false;
+                isMeasuring = false;
+                if (timeoutId) clearTimeout(timeoutId);
+                try { tspSource.stop(); } catch (e) { /* 再生済みなら無視 */ }
+                tspSource.disconnect();
+                gainNode.disconnect();
+                if (scriptNode) {
+                    scriptNode.disconnect();
+                    scriptNode.onaudioprocess = null;
+                    scriptNode = null;
+                }
+            }
 
-                if (isRecording) {
-                    for (let i = 0; i < inputData.length; i++) {
-                        recordedSamples.push(inputData[i]);
-                    }
+            async function finish() {
+                if (settled) return;
+                settled = true;
+                cleanup();
+
+                if (statusCallback) statusCallback('processing');
+
+                try {
+                    const recorded = recordBuffer.subarray(0, writeIndex);
+                    const ir = PinkTSP.extractImpulseResponse(recorded, tsp);
+                    const results = await analyzeIR(
+                        ir.samples.subarray(ir.peakIndex, ir.decayEndIndex),
+                        sampleRate,
+                        { method: 'pink-tsp', ir }
+                    );
+                    if (statusCallback) statusCallback('done');
+                    resolve(results);
+                } catch (err) {
+                    if (statusCallback) statusCallback('idle');
+                    reject(err);
+                }
+            }
+
+            scriptNode.onaudioprocess = (e) => {
+                // 出力は無音にする (マイク入力をスピーカーへ返すとハウリングし測定が壊れる)
+                const inputData = e.inputBuffer.getChannelData(0);
+                if (!isRecording) return;
+
+                const remaining = requiredSamples - writeIndex;
+                if (remaining <= 0) return;
+                const count = Math.min(remaining, inputData.length);
+                recordBuffer.set(inputData.subarray(0, count), writeIndex);
+                writeIndex += count;
+
+                if (writeIndex >= requiredSamples) {
+                    isRecording = false;
+                    finish();
                 }
             };
 
             sourceNode.connect(scriptNode);
             scriptNode.connect(audioCtx.destination);
 
-            sweepSource.start(0);
+            tspSource.start(0);
+            if (statusCallback) statusCallback('tsp-playing');
 
-            if (statusCallback) statusCallback('sweep-recording');
-
-            // スイープ再生後の余韻も録音
-            sweepSource.onended = () => {
-                setTimeout(() => {
-                    isRecording = false;
-                    isMeasuring = false;
-
-                    if (scriptNode) {
-                        scriptNode.disconnect();
-                        scriptNode = null;
-                    }
-
-                    if (statusCallback) statusCallback('processing');
-
-                    const recorded = new Float32Array(recordedSamples);
-
-                    // 簡易的なデコンボリューション (相互相関で近似)
-                    setTimeout(() => {
-                        const result = analyzeWithSweep(recorded, sweepSignal, sampleRate);
-                        if (statusCallback) statusCallback('done');
-                        resolve(result);
-                    }, 100);
-                }, 2000); // 2秒の余韻
-            };
+            // 再生が終わっても必要サンプル数に届かない場合の保険
+            const timeoutMs = (playBuffer.duration + 3) * 1000;
+            timeoutId = setTimeout(() => {
+                if (settled) return;
+                isRecording = false;
+                if (writeIndex >= 2 * tsp.length) {
+                    finish();
+                } else {
+                    settled = true;
+                    cleanup();
+                    if (statusCallback) statusCallback('idle');
+                    reject(new Error('録音データが不足しました。マイクの状態を確認してください'));
+                }
+            }, timeoutMs);
         });
     }
 
     /**
-     * インパルス応答を解析
+     * インパルス応答方式(手拍子など)の録音を解析
      */
     function analyzeImpulseResponse(rawData, sampleRate) {
         if (!rawData || rawData.length === 0) return null;
@@ -358,12 +403,49 @@ const Measurement = (() => {
         const startIdx = AudioUtils.detectImpulseStart(rawData);
         const irData = rawData.slice(startIdx);
 
+        // 手拍子方式でもIRを保持する (後段の保存・アップロードに回せるようにする)
+        let peak = 0;
+        let peakIndex = 0;
+        for (let i = 0; i < irData.length; i++) {
+            if (Math.abs(irData[i]) > peak) {
+                peak = Math.abs(irData[i]);
+                peakIndex = i;
+            }
+        }
+        const ir = {
+            samples: irData,
+            sampleRate: sampleRate,
+            peakIndex: peakIndex,
+            peakAmplitude: peak,
+            decayEndIndex: irData.length,
+            params: { signalType: 'impulse' }
+        };
+
+        return analyzeIR(irData, sampleRate, { method: 'impulse', ir });
+    }
+
+    /**
+     * インパルス応答からRT60等を算出する (両測定方式で共通)
+     * @param {Float32Array} irData - 直接音から始まるインパルス応答
+     * @param {number} sampleRate
+     * @param {object} meta - { method, ir }
+     * @returns {Promise<object>}
+     */
+    function analyzeIR(irData, sampleRate, meta = {}) {
         const results = {
             sampleRate: sampleRate,
             duration: irData.length / sampleRate,
             bands: {},
             overall: null,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            method: meta.method || 'impulse',
+            // 算出したIRの実データ (保存・アップロード用に保持する。LocalStorageには保存しない)
+            ir: meta.ir || null,
+            signalParams: meta.ir ? meta.ir.params : null,
+            plots: {
+                irWave: AudioUtils.downsampleIRWaveform(irData, sampleRate),
+                irDb: AudioUtils.buildIRDbCurve(irData, sampleRate)
+            }
         };
 
         // 全帯域でのRT60計算
@@ -418,66 +500,6 @@ const Measurement = (() => {
     }
 
     /**
-     * スイープ信号測定の解析 (簡易デコンボリューション)
-     */
-    async function analyzeWithSweep(recorded, sweep, sampleRate) {
-        // 簡易的：逆スイープとの畳み込み (時間領域)
-        // 本格的にはFFTを使うべきだが、ブラウザ環境では計算量を考慮
-        const inverseSweep = AudioUtils.generateInverseSweep(sweep, sampleRate);
-
-        // OfflineAudioContextで畳み込みを実行
-        try {
-            const convLen = recorded.length + inverseSweep.length - 1;
-            const ctx = new OfflineAudioContext(1, convLen, sampleRate);
-
-            // 録音データを入力
-            const recBuffer = ctx.createBuffer(1, recorded.length, sampleRate);
-            recBuffer.getChannelData(0).set(recorded);
-            const recSource = ctx.createBufferSource();
-            recSource.buffer = recBuffer;
-
-            // コンボルバーに逆スイープをセット
-            const convBuffer = ctx.createBuffer(1, inverseSweep.length, sampleRate);
-            convBuffer.getChannelData(0).set(inverseSweep);
-            const convolver = ctx.createConvolver();
-            convolver.buffer = convBuffer;
-
-            recSource.connect(convolver);
-            convolver.connect(ctx.destination);
-            recSource.start(0);
-
-            const renderedBuffer = await ctx.startRendering();
-            const irData = renderedBuffer.getChannelData(0);
-
-            // 得られたインパルス応答を解析
-            const results = {
-                sampleRate: sampleRate,
-                duration: irData.length / sampleRate,
-                bands: {},
-                overall: null,
-                timestamp: Date.now()
-            };
-
-            const fullEDC = AudioUtils.schroederIntegration(irData);
-            const fullResult = AudioUtils.calculateRT60(fullEDC, sampleRate, 'RT20');
-            const fullEDCData = AudioUtils.downsampleEDC(fullEDC, sampleRate);
-
-            results.overall = {
-                rt60: fullResult.rt60,
-                edt: fullResult.edt,
-                r2: fullResult.regression ? fullResult.regression.r2 : 0,
-                valid: fullResult.valid,
-                edc: fullEDCData
-            };
-
-            return processOctaveBands(irData, sampleRate, results);
-        } catch (err) {
-            console.error('スイープ解析エラー:', err);
-            return null;
-        }
-    }
-
-    /**
      * 測定を停止
      */
     function stopMeasurement() {
@@ -512,6 +534,13 @@ const Measurement = (() => {
     }
 
     /**
+     * 直近に生成したピンクTSP (逆フィルタを含む) を取得
+     */
+    function getLastTsp() {
+        return lastTsp;
+    }
+
+    /**
      * AudioContextを取得
      */
     function getAudioContext() {
@@ -525,7 +554,8 @@ const Measurement = (() => {
         setWaveformCallback,
         setStatusCallback,
         startImpulseMeasurement,
-        startSweepMeasurement,
+        startPinkTspMeasurement,
+        getLastTsp,
         stopMeasurement,
         setMode,
         getMode,

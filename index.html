@@ -62,28 +62,51 @@
             <span class="mode-icon">👏</span>
             インパルス応答
           </button>
-          <button class="mode-btn" data-mode="sweep">
+          <button class="mode-btn" data-mode="tsp">
             <span class="mode-icon">📡</span>
-            スイープ信号
+            ピンクTSP
           </button>
         </div>
 
-        <!-- スイープ信号設定 -->
-        <div id="sweepSettings" class="sweep-settings">
+        <!-- ピンクTSP設定 -->
+        <div id="tspSettings" class="tsp-settings">
           <div class="setting-row">
             <span class="setting-label">信号タイプ</span>
-            <span class="setting-value">ログスイープ</span>
+            <span class="setting-value">ピンクTSP (-3dB/oct)</span>
           </div>
           <div class="setting-row">
-            <span class="setting-label">周波数範囲</span>
-            <span class="setting-value">20Hz - 20kHz</span>
+            <label class="setting-label" for="tspDuration">信号長</label>
+            <select id="tspDuration" class="setting-input">
+              <option value="1.5">約1.5秒</option>
+              <option value="3" selected>約3秒</option>
+              <option value="6">約6秒</option>
+              <option value="12">約12秒</option>
+            </select>
           </div>
           <div class="setting-row">
-            <span class="setting-label">持続時間</span>
-            <span class="setting-value">3秒</span>
+            <label class="setting-label" for="tspStartFreq">開始周波数</label>
+            <input type="number" id="tspStartFreq" class="setting-input" value="40" min="10" max="1000" step="10" aria-label="開始周波数(Hz)">
+          </div>
+          <div class="setting-row">
+            <label class="setting-label" for="tspEndFreq">終了周波数</label>
+            <input type="number" id="tspEndFreq" class="setting-input" value="16000" min="1000" max="24000" step="500" aria-label="終了周波数(Hz)">
+          </div>
+          <div class="setting-row">
+            <label class="setting-label" for="tspAverages">同期加算回数</label>
+            <select id="tspAverages" class="setting-input">
+              <option value="1">1回</option>
+              <option value="2" selected>2回</option>
+              <option value="4">4回</option>
+              <option value="8">8回</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <span class="setting-label">測定時間の目安</span>
+            <span class="setting-value" id="tspEstimate">--</span>
           </div>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
-            ⚠️ スイープ信号はスピーカーから再生されます。音量にご注意ください。
+            ⚠️ ピンクTSPがスピーカーから再生されます。音量にご注意ください。<br>
+            ピンク特性はオクターブあたりのエネルギーが一定になるため、低域のS/Nを確保しやすくなります。
           </p>
         </div>
       </div>
@@ -163,6 +186,18 @@
               <div class="rt60-value" id="validValue" style="font-size:1rem;">--</div>
             </div>
           </div>
+        </div>
+
+        <!-- インパルス応答グラフ -->
+        <div class="card">
+          <div class="card-title">🌊 インパルス応答 (IR)</div>
+          <div class="chart-container">
+            <canvas id="irChart"></canvas>
+          </div>
+          <div class="chart-container">
+            <canvas id="irDbChart"></canvas>
+          </div>
+          <div id="irInfo" class="ir-info"></div>
         </div>
 
         <!-- EDCグラフ -->
@@ -251,16 +286,23 @@
           <li>自動的に録音・解析が行われます</li>
         </ul>
 
-        <h3>📡 スイープ信号方式</h3>
+        <h3>📡 ピンクTSP方式</h3>
         <p>
-          スピーカーからスイープ信号を再生し、その応答をマイクで録音して解析します。よりを得られますが、スピーカーが必要です。
+          スピーカーからピンクTSP（ピンク特性の時間引き伸ばしパルス）を再生し、
+          録音した応答に逆フィルタを掛けてインパルス応答を求めます。
+          スピーカーが必要ですが、手拍子より精度の高い測定ができます。
         </p>
         <ul>
-          <li>「スイープ信号」モードを選択</li>
+          <li>「ピンクTSP」モードを選択</li>
+          <li>必要に応じて信号長・周波数範囲・同期加算回数を設定</li>
           <li>「開始」ボタンをタップ</li>
-          <li>スピーカーから信号が再生されます</li>
-          <li>自動的に録音・解析が行われます</li>
+          <li>スピーカーから信号が再生され、自動的に録音・解析が行われます</li>
         </ul>
+        <p>
+          ピンクTSPはパワーが 1/f（オクターブあたり一定エネルギー、-3dB/oct）になるよう
+          設計された測定信号です。白色TSPのように高域へエネルギーが偏らないため、
+          室内測定で不足しがちな低域のS/Nを確保でき、スピーカーの過大入力も避けられます。
+        </p>
 
         <h3>💡 より正確な結果を得るコツ</h3>
         <ul>
@@ -277,6 +319,8 @@
           <li><strong>EDT</strong>: 初期減衰時間。体感的な残響感を示します</li>
           <li><strong>R²</strong>: 近似精度。90%以上で信頼できる結果</li>
           <li><strong>周波数帯別</strong>: 低音から高音まで帯域ごとのRT60</li>
+          <li><strong>インパルス応答(IR)</strong>: 音源から耳（マイク）までの応答波形。
+            dB表示のSchroeder積分曲線が直線的に下がっていれば良好な測定です</li>
         </ul>
       </div>
     </div>
@@ -286,6 +330,8 @@
   <div id="toastContainer" class="toast-container"></div>
 
   <!-- ===== Scripts ===== -->
+  <script src="js/fft.js"></script>
+  <script src="js/pink-tsp.js"></script>
   <script src="js/audio-utils.js"></script>
   <script src="js/measurement.js"></script>
   <script src="js/visualization.js"></script>

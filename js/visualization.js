@@ -5,6 +5,8 @@
 const Visualization = (() => {
     let edcChart = null;
     let bandChart = null;
+    let irChart = null;
+    let irDbChart = null;
     let waveformCtx = null;
     let waveformCanvas = null;
 
@@ -19,7 +21,10 @@ const Visualization = (() => {
             regression: '#ef4565',
             bands: ['#4f6ef7', '#6c8aff', '#2cb67d', '#f5a623', '#ef4565', '#a855f7'],
             waveform: '#4f6ef7',
-            waveformBg: '#e8ecf1'
+            waveformBg: '#e8ecf1',
+            ir: '#2cb67d',
+            irFill: 'rgba(44, 182, 125, 0.12)',
+            schroeder: '#ef4565'
         },
         dark: {
             grid: 'rgba(255, 255, 255, 0.06)',
@@ -30,7 +35,10 @@ const Visualization = (() => {
             regression: '#ff6b8a',
             bands: ['#6c8aff', '#8da3ff', '#3dd68c', '#ffbe4f', '#ff6b8a', '#c084fc'],
             waveform: '#6c8aff',
-            waveformBg: '#252830'
+            waveformBg: '#252830',
+            ir: '#3dd68c',
+            irFill: 'rgba(61, 214, 140, 0.15)',
+            schroeder: '#ff6b8a'
         }
     };
 
@@ -198,6 +206,127 @@ const Visualization = (() => {
                     }
                 }
             }
+        });
+    }
+
+    /**
+     * 時間軸/dB軸グラフの共通オプション
+     */
+    function timeAxisOptions(colors, yTitle, yMin, yMax, title) {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 400, easing: 'easeOutQuart' },
+            plugins: {
+                title: {
+                    display: !!title,
+                    text: title,
+                    color: colors.text,
+                    font: { size: 13, weight: 600 }
+                },
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: colors.text,
+                        font: { size: 11 },
+                        usePointStyle: true,
+                        pointStyle: 'line'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleFont: { size: 12 },
+                    bodyFont: { size: 11 }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: '時間 (秒)', color: colors.text, font: { size: 11 } },
+                    ticks: { color: colors.text, font: { size: 10 }, maxTicksLimit: 10 },
+                    grid: { color: colors.grid }
+                },
+                y: {
+                    title: { display: true, text: yTitle, color: colors.text, font: { size: 11 } },
+                    ticks: { color: colors.text, font: { size: 10 } },
+                    grid: { color: colors.grid },
+                    min: yMin,
+                    max: yMax
+                }
+            }
+        };
+    }
+
+    /**
+     * インパルス応答の時間波形を描画
+     * @param {string} canvasId
+     * @param {{times:number[], values:number[]}} irWave
+     */
+    function drawIRChart(canvasId, irWave) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !irWave || !irWave.times.length) return;
+
+        const colors = getThemeColors();
+        if (irChart) irChart.destroy();
+
+        irChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: irWave.times.map(t => t.toFixed(3)),
+                datasets: [{
+                    label: 'インパルス応答 (正規化振幅)',
+                    data: irWave.values,
+                    borderColor: colors.ir,
+                    backgroundColor: colors.irFill,
+                    borderWidth: 1,
+                    fill: true,
+                    pointRadius: 0,
+                    tension: 0
+                }]
+            },
+            options: timeAxisOptions(colors, '振幅', -1.05, 1.05)
+        });
+    }
+
+    /**
+     * インパルス応答のdB表示 (dBエンベロープ + Schroeder積分曲線)
+     * @param {string} canvasId
+     * @param {{times:number[], envelope:number[], schroeder:number[]}} irDb
+     */
+    function drawIRDbChart(canvasId, irDb) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas || !irDb || !irDb.times.length) return;
+
+        const colors = getThemeColors();
+        if (irDbChart) irDbChart.destroy();
+
+        irDbChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: irDb.times.map(t => t.toFixed(3)),
+                datasets: [
+                    {
+                        label: 'IRレベル (dB)',
+                        data: irDb.envelope,
+                        borderColor: colors.ir,
+                        backgroundColor: colors.irFill,
+                        borderWidth: 1,
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0
+                    },
+                    {
+                        label: 'Schroeder積分 (EDC)',
+                        data: irDb.schroeder,
+                        borderColor: colors.schroeder,
+                        borderWidth: 2,
+                        fill: false,
+                        pointRadius: 0,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: timeAxisOptions(colors, 'レベル (dB)', -80, 5)
         });
     }
 
@@ -404,6 +533,16 @@ const Visualization = (() => {
             bandChart.options.scales.y.grid.color = colors.grid;
             bandChart.update('none');
         }
+        [irChart, irDbChart].forEach(chart => {
+            if (!chart) return;
+            const colors = getThemeColors();
+            chart.options.scales.x.ticks.color = colors.text;
+            chart.options.scales.y.ticks.color = colors.text;
+            chart.options.scales.x.grid.color = colors.grid;
+            chart.options.scales.y.grid.color = colors.grid;
+            chart.options.plugins.legend.labels.color = colors.text;
+            chart.update('none');
+        });
     }
 
     /**
@@ -412,12 +551,16 @@ const Visualization = (() => {
     function destroyCharts() {
         if (edcChart) { edcChart.destroy(); edcChart = null; }
         if (bandChart) { bandChart.destroy(); bandChart = null; }
+        if (irChart) { irChart.destroy(); irChart = null; }
+        if (irDbChart) { irDbChart.destroy(); irDbChart = null; }
     }
 
     return {
         initWaveform,
         drawWaveform,
         drawEDCChart,
+        drawIRChart,
+        drawIRDbChart,
         drawBandChart,
         drawComparisonChart,
         updateTheme,

@@ -202,65 +202,6 @@ const AudioUtils = (() => {
   }
 
   /**
-   * ログスイープ信号を生成
-   * @param {number} sampleRate
-   * @param {number} duration - 秒
-   * @param {number} f1 - 開始周波数
-   * @param {number} f2 - 終了周波数
-   * @returns {Float32Array}
-   */
-  function generateLogSweep(sampleRate, duration, f1 = 20, f2 = 20000) {
-    const n = Math.floor(sampleRate * duration);
-    const sweep = new Float32Array(n);
-    const w1 = 2 * Math.PI * f1;
-    const w2 = 2 * Math.PI * f2;
-    const T = duration;
-
-    for (let i = 0; i < n; i++) {
-      const t = i / sampleRate;
-      sweep[i] = Math.sin(
-        (w1 * T / Math.log(w2 / w1)) * (Math.exp(t / T * Math.log(w2 / w1)) - 1)
-      );
-    }
-
-    return sweep;
-  }
-
-  /**
-   * 逆フィルタを生成 (スイープ信号のデコンボリューション用)
-   * @param {Float32Array} sweep
-   * @param {number} sampleRate
-   * @param {number} f1
-   * @param {number} f2
-   * @returns {Float32Array}
-   */
-  function generateInverseSweep(sweep, sampleRate, f1 = 20, f2 = 20000) {
-    const n = sweep.length;
-    const inverse = new Float32Array(n);
-    const duration = n / sampleRate;
-
-    // 逆スイープ = 時間反転 × 振幅補正
-    for (let i = 0; i < n; i++) {
-      const t = i / sampleRate;
-      const amplitudeEnvelope = Math.exp(-t / duration * Math.log(f2 / f1));
-      inverse[i] = sweep[n - 1 - i] * amplitudeEnvelope;
-    }
-
-    // 正規化
-    let maxAbs = 0;
-    for (let i = 0; i < n; i++) {
-      maxAbs = Math.max(maxAbs, Math.abs(inverse[i]));
-    }
-    if (maxAbs > 0) {
-      for (let i = 0; i < n; i++) {
-        inverse[i] /= maxAbs;
-      }
-    }
-
-    return inverse;
-  }
-
-  /**
    * 振幅からdBに変換
    * @param {number} amplitude
    * @returns {number}
@@ -321,6 +262,75 @@ const AudioUtils = (() => {
     return { times, values };
   }
 
+  /**
+   * IR波形を描画用にダウンサンプリング
+   * 各区間で絶対値が最大のサンプルを代表値にして、ピークを潰さずに間引く
+   * @param {Float32Array} ir
+   * @param {number} sampleRate
+   * @param {number} maxPoints
+   * @returns {{ times: number[], values: number[] }}
+   */
+  function downsampleIRWaveform(ir, sampleRate, maxPoints = 800) {
+    const step = Math.max(1, Math.floor(ir.length / maxPoints));
+    const times = [];
+    const values = [];
+
+    for (let i = 0; i < ir.length; i += step) {
+      const end = Math.min(i + step, ir.length);
+      let peak = 0;
+      let peakIdx = i;
+      for (let j = i; j < end; j++) {
+        if (Math.abs(ir[j]) > peak) {
+          peak = Math.abs(ir[j]);
+          peakIdx = j;
+        }
+      }
+      times.push(Math.round(peakIdx / sampleRate * 100000) / 100000);
+      values.push(Math.round(ir[peakIdx] * 10000) / 10000);
+    }
+
+    return { times, values };
+  }
+
+  /**
+   * IRのdB表示用データ (区間RMSのdBエンベロープ + Schroeder積分曲線)
+   * @param {Float32Array} ir
+   * @param {number} sampleRate
+   * @param {number} maxPoints
+   * @returns {{ times: number[], envelope: number[], schroeder: number[] }}
+   */
+  function buildIRDbCurve(ir, sampleRate, maxPoints = 600) {
+    const step = Math.max(1, Math.floor(ir.length / maxPoints));
+    const edc = schroederIntegration(ir);
+
+    // 区間RMSを求め、最大値を0dBとして正規化する
+    const rmsValues = [];
+    const indices = [];
+    let maxRms = 0;
+    for (let i = 0; i < ir.length; i += step) {
+      const end = Math.min(i + step, ir.length);
+      let sum = 0;
+      for (let j = i; j < end; j++) sum += ir[j] * ir[j];
+      const rms = Math.sqrt(sum / (end - i));
+      if (rms > maxRms) maxRms = rms;
+      rmsValues.push(rms);
+      indices.push(i);
+    }
+
+    const times = [];
+    const envelope = [];
+    const schroeder = [];
+    const ref = maxRms > 0 ? maxRms : 1;
+    for (let k = 0; k < rmsValues.length; k++) {
+      times.push(Math.round(indices[k] / sampleRate * 100000) / 100000);
+      const db = 20 * Math.log10(Math.max(rmsValues[k] / ref, 1e-6));
+      envelope.push(Math.round(db * 10) / 10);
+      schroeder.push(Math.round(edc[indices[k]] * 10) / 10);
+    }
+
+    return { times, envelope, schroeder };
+  }
+
   return {
     OCTAVE_BANDS,
     createBandpassFilter,
@@ -328,11 +338,11 @@ const AudioUtils = (() => {
     schroederIntegration,
     linearRegression,
     calculateRT60,
-    generateLogSweep,
-    generateInverseSweep,
     amplitudeToDb,
     calculateRMS,
     detectImpulseStart,
-    downsampleEDC
+    downsampleEDC,
+    downsampleIRWaveform,
+    buildIRDbCurve
   };
 })();
