@@ -199,7 +199,8 @@ const App = (() => {
 
     /**
      * ピンクTSPの測定時間の目安を表示する
-     * 実際の信号長はAudioContextのサンプリングレートで決まるため、48kHz想定の概算を出す
+     * 実際の信号長はAudioContextのサンプリングレートで決まるので、
+     * マイク未初期化のうちは48kHz想定で概算する
      */
     function updateTspEstimate() {
         const el = document.getElementById('tspEstimate');

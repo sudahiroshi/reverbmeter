@@ -972,13 +972,6 @@ body {
   box-shadow: 0 0 0 3px var(--accent-light);
 }
 
-/* --- IR測定条件 --- */
-.ir-info {
-  margin-top: 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
-}
-
 .setting-row {
   display: flex;
   align-items: center;
@@ -996,6 +989,13 @@ body {
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
+}
+
+/* --- IR測定条件 --- */
+.ir-info {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
 }
 
 /* --- Comparison Mode --- */

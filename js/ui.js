@@ -228,7 +228,7 @@ const UI = (() => {
 
         if (result.method === 'pink-tsp' && ir && ir.params) {
             const p = ir.params;
-            items.push(['測定信号', `ピンクTSP (-3dB/oct)`]);
+            items.push(['測定信号', 'ピンクTSP (-3dB/oct)']);
             items.push(['周波数範囲', `${Math.round(p.startFreq)} Hz 〜 ${Math.round(p.endFreq)} Hz`]);
             items.push(['信号長', `${p.durationSec.toFixed(2)} 秒`]);
             items.push(['同期加算', `${ir.blocksUsed} 回`]);
