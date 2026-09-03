@@ -56,16 +56,22 @@ const App = (() => {
                 btn.classList.add('active');
                 Measurement.setMode(btn.dataset.mode);
 
-                // スイープ設定の表示切替
-                const sweepSettings = document.getElementById('sweepSettings');
-                if (sweepSettings) {
-                    sweepSettings.classList.toggle('visible', btn.dataset.mode === 'sweep');
+                // ピンクTSP設定の表示切替
+                const tspSettings = document.getElementById('tspSettings');
+                if (tspSettings) {
+                    tspSettings.classList.toggle('visible', btn.dataset.mode === 'tsp');
                 }
             });
         });
 
         // 測定ボタン
         document.getElementById('measureBtn')?.addEventListener('click', startMeasurement);
+
+        // ピンクTSP設定の変更で測定時間の目安を更新
+        ['tspDuration', 'tspStartFreq', 'tspEndFreq', 'tspAverages'].forEach(id => {
+            document.getElementById(id)?.addEventListener('change', updateTspEstimate);
+        });
+        updateTspEstimate();
 
         // 保存ボタン
         document.getElementById('saveBtn')?.addEventListener('click', saveResult);
@@ -132,18 +138,29 @@ const App = (() => {
         }
 
         const mode = Measurement.getMode();
-        let result;
+        let result = null;
 
-        if (mode === 'sweep') {
-            result = await Measurement.startSweepMeasurement(3);
-        } else {
-            result = await Measurement.startImpulseMeasurement();
+        try {
+            if (mode === 'tsp') {
+                result = await Measurement.startPinkTspMeasurement(getTspOptions());
+            } else {
+                result = await Measurement.startImpulseMeasurement();
+            }
+        } catch (err) {
+            console.error('測定エラー:', err);
+            UI.showToast(err.message || '測定に失敗しました', 'error');
+            return;
         }
 
         if (result) {
             currentResult = result;
             UI.displayResults(result);
-            UI.showToast('測定完了！', 'success');
+
+            if (result.ir && result.ir.clipped) {
+                UI.showToast('入力がクリッピングしています。音量を下げて再測定してください', 'error');
+            } else {
+                UI.showToast('測定完了！', 'success');
+            }
 
             // 結果タブに切り替え
             setTimeout(() => {
@@ -152,6 +169,50 @@ const App = (() => {
         } else {
             UI.showToast('測定に失敗しました。もう一度お試しください。', 'error');
         }
+    }
+
+    /**
+     * UIからピンクTSPの測定パラメータを読み取る
+     */
+    function getTspOptions() {
+        const num = (id, fallback) => {
+            const el = document.getElementById(id);
+            const v = el ? parseFloat(el.value) : NaN;
+            return isFinite(v) ? v : fallback;
+        };
+
+        const startFreq = num('tspStartFreq', PinkTSP.DEFAULTS.startFreq);
+        let endFreq = num('tspEndFreq', PinkTSP.DEFAULTS.endFreq);
+
+        // 開始 < 終了 を保証する (逆転入力への保険)
+        if (endFreq <= startFreq * 2) {
+            endFreq = startFreq * 2;
+        }
+
+        return {
+            durationSec: num('tspDuration', PinkTSP.DEFAULTS.durationSec),
+            startFreq: startFreq,
+            endFreq: endFreq,
+            averages: num('tspAverages', PinkTSP.DEFAULTS.averages)
+        };
+    }
+
+    /**
+     * ピンクTSPの測定時間の目安を表示する
+     * 実際の信号長はAudioContextのサンプリングレートで決まるため、48kHz想定の概算を出す
+     */
+    function updateTspEstimate() {
+        const el = document.getElementById('tspEstimate');
+        if (!el) return;
+
+        const opts = getTspOptions();
+        const sampleRate = Measurement.getAudioContext()?.sampleRate || 48000;
+
+        // 信号長は2の冪サンプルに丸められるため、丸めた後の長さで見積もる
+        const signalSec = Math.pow(2, Math.round(Math.log2(sampleRate * opts.durationSec))) / sampleRate;
+        const total = signalSec * (opts.averages + 2); // 再生は 同期加算回数+2 周期
+
+        el.textContent = `約${total.toFixed(1)}秒 (信号長 ${signalSec.toFixed(2)}秒)`;
     }
 
     /**
@@ -273,9 +334,27 @@ const App = (() => {
         UI.showToast(`${ids.length}件を${format.toUpperCase()}でエクスポートしました`, 'success');
     }
 
+    /**
+     * 直近の測定で得られたインパルス応答を返す
+     * (次フェーズのサーバアップロード用。UIや通信はまだ持たない)
+     * @returns {object|null} { samples: Float32Array, sampleRate, peakIndex, ... }
+     */
+    function getCurrentIR() {
+        return currentResult ? currentResult.ir || null : null;
+    }
+
+    /**
+     * 直近の測定結果そのものを返す
+     */
+    function getCurrentResult() {
+        return currentResult;
+    }
+
     return {
         init,
         startMeasurement,
+        getCurrentIR,
+        getCurrentResult,
         saveResult,
         viewResult,
         deleteSingle,

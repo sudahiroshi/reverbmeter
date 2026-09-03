@@ -941,16 +941,42 @@ body {
   }
 }
 
-/* --- Sweep Settings --- */
-.sweep-settings {
+/* --- ピンクTSP設定 --- */
+.tsp-settings {
   display: none;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
 
-.sweep-settings.visible {
+.tsp-settings.visible {
   display: block;
+}
+
+.setting-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  min-width: 110px;
+  max-width: 45%;
+  transition: border-color var(--transition);
+}
+
+.setting-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+/* --- IR測定条件 --- */
+.ir-info {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
 }
 
 .setting-row {

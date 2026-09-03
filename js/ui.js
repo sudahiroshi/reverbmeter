@@ -134,8 +134,7 @@ const UI = (() => {
             'idle': { text: '音源（手拍子・風船）を鳴らす準備ができたら開始', icon: '🎤', btnText: '開始', btnClass: '' },
             'waiting': { text: '💡 手拍子または風船を割ってください', icon: '👂', btnText: '待機中', btnClass: 'recording' },
             'recording': { text: '🔴 録音中...減衰を検出しています', icon: '⏺', btnText: '録音中', btnClass: 'recording' },
-            'sweep-playing': { text: '🔊 スイープ信号を再生中...', icon: '📡', btnText: '再生中', btnClass: 'recording' },
-            'sweep-recording': { text: '🎙️ 応答を録音中...', icon: '⏺', btnText: '録音中', btnClass: 'recording' },
+            'tsp-playing': { text: '🔊 ピンクTSPを再生中... 静かにしてください', icon: '📡', btnText: '測定中', btnClass: 'recording' },
             'processing': { text: '⚙️ 解析中...', icon: '⏳', btnText: '解析中', btnClass: 'processing' },
             'done': { text: '✅ 測定完了！結果タブで確認できます', icon: '🎤', btnText: '開始', btnClass: '' }
         };
@@ -189,6 +188,17 @@ const UI = (() => {
                 : `<span style="color:var(--warning)">△ 不確実</span>`;
         }
 
+        // インパルス応答グラフ (保存済みデータには含まれないため存在する場合のみ)
+        const irCard = document.getElementById('irChart')?.closest('.card');
+        if (result.plots && result.plots.irWave && result.plots.irWave.times.length > 0) {
+            if (irCard) irCard.style.display = '';
+            Visualization.drawIRChart('irChart', result.plots.irWave);
+            Visualization.drawIRDbChart('irDbChart', result.plots.irDb);
+            displayIRInfo(result);
+        } else if (irCard) {
+            irCard.style.display = 'none';
+        }
+
         // EDCグラフ
         if (overall.edc && overall.edc.times.length > 0) {
             Visualization.drawEDCChart('edcChart', overall.edc);
@@ -204,6 +214,41 @@ const UI = (() => {
         const resultContent = document.getElementById('resultContent');
         if (placeholder) placeholder.style.display = 'none';
         if (resultContent) resultContent.style.display = 'block';
+    }
+
+    /**
+     * IRの測定条件を表示
+     */
+    function displayIRInfo(result) {
+        const el = document.getElementById('irInfo');
+        if (!el) return;
+
+        const ir = result.ir;
+        const items = [];
+
+        if (result.method === 'pink-tsp' && ir && ir.params) {
+            const p = ir.params;
+            items.push(['測定信号', `ピンクTSP (-3dB/oct)`]);
+            items.push(['周波数範囲', `${Math.round(p.startFreq)} Hz 〜 ${Math.round(p.endFreq)} Hz`]);
+            items.push(['信号長', `${p.durationSec.toFixed(2)} 秒`]);
+            items.push(['同期加算', `${ir.blocksUsed} 回`]);
+            items.push(['入力レベル', `${ir.inputLevelDbfs.toFixed(1)} dBFS`]);
+            items.push(['S/N (推定)', `${ir.snrDb.toFixed(1)} dB`]);
+            if (ir.clipped) {
+                items.push(['⚠️ 警告', `クリッピング検出 (${(ir.clippingRatio * 100).toFixed(1)}%)`]);
+            }
+        } else {
+            items.push(['測定信号', 'インパルス応答 (手拍子・風船)']);
+        }
+
+        items.push(['サンプリング周波数', `${result.sampleRate} Hz`]);
+        items.push(['IR長', `${result.duration.toFixed(2)} 秒`]);
+
+        el.innerHTML = items.map(([label, value]) => `
+            <div class="setting-row">
+              <span class="setting-label">${label}</span>
+              <span class="setting-value">${escapeHtml(String(value))}</span>
+            </div>`).join('');
     }
 
     /**
