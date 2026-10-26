@@ -381,10 +381,10 @@
 
   <!-- ===== ヘルプモーダル (初回表示と❓で共有。概要→準備→測定→結果→用語のステップ表示) ===== -->
   <div id="helpModal" class="modal-overlay">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
       <div class="modal-header">
-        <h2 class="modal-title">📐 ReverbMeter の使い方</h2>
-        <button class="modal-close" aria-label="閉じる">×</button>
+        <h2 id="helpTitle" class="modal-title">📐 ReverbMeter の使い方</h2>
+        <button type="button" class="modal-close" aria-label="閉じる">×</button>
       </div>
       <nav class="guide-step-nav" aria-label="使い方のステップ">
         <button type="button" class="step-chip" data-step="0">1 概要</button>

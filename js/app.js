@@ -68,7 +68,9 @@ const App = (() => {
         // 確認ダイアログ
         document.getElementById('confirmOk')?.addEventListener('click', () => UI.answerConfirm(true));
         document.getElementById('confirmCancel')?.addEventListener('click', () => UI.answerConfirm(false));
-        document.addEventListener('keydown', UI.handleConfirmKeydown);
+
+        // モーダル (ヘルプ・確認ダイアログ) の Esc と Tab の循環
+        document.addEventListener('keydown', UI.handleModalKeydown);
 
         // 未保存の測定結果はメモリにしか無いため、再読み込みや閉じる前に確認する
         // (この場面ではアプリ内のダイアログを出せず、ブラウザ標準の確認になる)

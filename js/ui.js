@@ -6,7 +6,12 @@
 const UI = (() => {
     const THEME_KEY = 'reverberation_theme';
     let guideStep = 0; // ヘルプで表示中のステップ
-    let pendingConfirm = null; // 開いている確認ダイアログ { resolve, opener }
+    let pendingConfirm = null; // 開いている確認ダイアログの { resolve }
+    const openModals = [];     // 開いているモーダル { id, opener } (後に開いたものが末尾。確認ダイアログはヘルプの上にも開ける)
+
+    // モーダル内で Tab の循環に含める要素
+    const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+        'textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
     /**
      * テーマを初期化
@@ -99,18 +104,25 @@ const UI = (() => {
     }
 
     /**
-     * モーダルを表示
+     * モーダルを表示し、モーダル内へフォーカスを移す
+     * 閉じたときに戻せるよう、開く前にフォーカスがあった要素を覚えておく
+     * @param {string} modalId
+     * @param {HTMLElement} [focusTarget] - 最初にフォーカスする要素 (省略時はモーダル内の最初の要素)
      */
-    function showModal(modalId) {
+    function showModal(modalId, focusTarget) {
         const modal = document.getElementById(modalId);
-        if (modal) {
+        if (!modal) return;
+
+        if (!modal.classList.contains('active')) {
+            openModals.push({ id: modalId, opener: document.activeElement });
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
+        (focusTarget || getFocusable(modal)[0])?.focus({ preventScroll: true });
     }
 
     /**
-     * モーダルを閉じる
+     * モーダルを閉じ、開く前の要素へフォーカスを戻す
      */
     function closeModal(modalId) {
         // 確認ダイアログを × や背景クリックで閉じたときは、キャンセルとして結果を返す
@@ -119,9 +131,55 @@ const UI = (() => {
             return;
         }
         const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
+        const index = openModals.findIndex(m => m.id === modalId);
+        if (!modal || index === -1) return;
+
+        const { opener } = openModals.splice(index, 1)[0];
+        modal.classList.remove('active');
+        if (openModals.length === 0) document.body.style.overflow = '';
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+    }
+
+    /**
+     * モーダル内のフォーカスできる要素 (非表示のステップ内などは除く)
+     */
+    function getFocusable(modal) {
+        return Array.from(modal.querySelectorAll(FOCUSABLE))
+            .filter(el => el.getClientRects().length > 0);
+    }
+
+    /**
+     * モーダルを開いている間のキー操作 (Esc で一番上のモーダルを閉じる、Tab はモーダル内で循環させる)
+     */
+    function handleModalKeydown(e) {
+        const top = openModals[openModals.length - 1];
+        if (!top) return;
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            closeModal(top.id);
+            return;
+        }
+        if (e.key !== 'Tab') return;
+
+        const modal = document.getElementById(top.id);
+        const focusable = getFocusable(modal);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        // 端の要素からだけ反対側へ回す。間の要素 (ブラウザがキーボードでスクロールできるよう
+        // Tab で止める本文の枠など) では、ブラウザの既定の移動に任せる
+        if (!modal.contains(active)) {
+            e.preventDefault();
+            (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
         }
     }
 
@@ -232,7 +290,7 @@ const UI = (() => {
     }
 
     /**
-     * ヘルプの指定ステップ (0:概要 1:準備 2:測定 3:結果) を表示する
+     * ヘルプの指定ステップ (0:概要 1:準備 2:測定 3:結果 4:用語) を表示する
      */
     function showGuideStep(index) {
         const modal = document.getElementById('helpModal');
@@ -279,7 +337,7 @@ const UI = (() => {
 
     /**
      * 確認ダイアログを開く。押されたボタンに応じて true (実行) / false (キャンセル) で解決する
-     * Esc・×・背景クリックはキャンセル扱い。閉じると開く前の要素へフォーカスを戻す
+     * Esc・×・背景クリックはキャンセル扱い。フォーカスの移動と復帰は showModal / closeModal が行う
      * @param {{title: string, message: string, okLabel: string}} options
      * @returns {Promise<boolean>}
      */
@@ -292,54 +350,21 @@ const UI = (() => {
         document.getElementById('confirmOk').textContent = okLabel;
 
         return new Promise(resolve => {
-            pendingConfirm = { resolve, opener: document.activeElement };
-            showModal('confirmModal');
+            pendingConfirm = { resolve };
             // 削除など取り消せない操作なので、Enter を押しただけでは実行されないようキャンセル側を既定にする
-            document.getElementById('confirmCancel').focus();
+            showModal('confirmModal', document.getElementById('confirmCancel'));
         });
     }
 
     /**
-     * 確認ダイアログを閉じて結果を返す
+     * 確認ダイアログを閉じて結果を返す (フォーカスは closeModal が開く前の要素へ戻す)
      */
     function answerConfirm(ok) {
         if (!pendingConfirm) return;
-        const { resolve, opener } = pendingConfirm;
+        const { resolve } = pendingConfirm;
         pendingConfirm = null;
         closeModal('confirmModal');
-        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
         resolve(ok);
-    }
-
-    /**
-     * 確認ダイアログを開いている間のキー操作 (Esc で閉じる、Tab はダイアログ内で循環させる)
-     */
-    function handleConfirmKeydown(e) {
-        if (!pendingConfirm) return;
-
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            answerConfirm(false);
-            return;
-        }
-        if (e.key !== 'Tab') return;
-
-        const modal = document.querySelector('#confirmModal .modal');
-        const focusable = Array.from(modal.querySelectorAll('button:not([disabled])'));
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        const active = document.activeElement;
-
-        if (!modal.contains(active)) {
-            e.preventDefault();
-            first.focus();
-        } else if (e.shiftKey && active === first) {
-            e.preventDefault();
-            last.focus();
-        } else if (!e.shiftKey && active === last) {
-            e.preventDefault();
-            first.focus();
-        }
     }
 
     /**
@@ -660,7 +685,7 @@ const UI = (() => {
         prevGuideStep,
         confirm,
         answerConfirm,
-        handleConfirmKeydown,
+        handleModalKeydown,
         updateMeasureStatus,
         setPreviewPlaying,
         displayResults,
