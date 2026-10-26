@@ -9,6 +9,16 @@ const App = (() => {
     let suggestedName = '';    // 保存欄に入れた測定名の既定値
     let micInitialized = false;
 
+    /*
+     * レベルメーターの適正範囲 (dBFS)。メーターの帯と凡例の数値はここから作る (README の表も同じ値)
+     * - low 未満は小さすぎ: インパルス方式が静寂とみなすレベル
+     *   (measurement.js の SILENCE_THRESHOLD 0.005 ≈ -46 dBFS) に近く、背景音と区別しにくい
+     * - high 超は大きすぎ: メーターは 2048 サンプル窓の RMS で、ピンクTSP の窓内の
+     *   ピーク/RMS 比は最大で約 8.5 dB。-10 dBFS 以下ならピークがクリッピング判定
+     *   (pink-tsp.js の CLIP_LEVEL 0.99 ≈ -0.1 dBFS) に届かない
+     */
+    const LEVEL_RANGE = { low: -40, high: -10 };
+
     /**
      * アプリケーション初期化
      */
@@ -18,6 +28,9 @@ const App = (() => {
 
         // 波形キャンバス初期化
         Visualization.initWaveform('waveformCanvas');
+
+        // レベルメーターの適正範囲の帯と凡例
+        initLevelRange();
 
         // タブナビゲーション
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -333,6 +346,27 @@ const App = (() => {
     }
 
     /**
+     * レベルメーターの帯の境界 (CSS の --level-low / --level-high) と凡例の数値を LEVEL_RANGE から設定する
+     */
+    function initLevelRange() {
+        const meter = document.querySelector('.level-meter');
+        if (meter) {
+            meter.style.setProperty('--level-low', `${levelToPercent(LEVEL_RANGE.low)}%`);
+            meter.style.setProperty('--level-high', `${levelToPercent(LEVEL_RANGE.high)}%`);
+        }
+        document.querySelectorAll('[data-level-bound]').forEach(el => {
+            el.textContent = LEVEL_RANGE[el.dataset.levelBound];
+        });
+    }
+
+    /**
+     * dBFS をメーター上の位置 (-60dB〜0dB を 0%〜100%) に変換する
+     */
+    function levelToPercent(db) {
+        return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+    }
+
+    /**
      * レベルメーターを更新
      */
     function updateLevelMeter(db, rms) {
@@ -345,8 +379,8 @@ const App = (() => {
         }
 
         if (levelFill) {
-            // -60dB〜0dBを0%〜100%にマップ (帯の色と位置をそろえるため、幅ではなく右側を隠して表す)
-            const percent = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+            // 帯の色と位置をそろえるため、幅ではなく右側を隠して表す
+            const percent = levelToPercent(db);
             levelFill.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
         }
     }
