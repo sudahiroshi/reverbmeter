@@ -358,6 +358,41 @@ body {
   margin-top: 8px;
 }
 
+/* 本文中からヘルプの該当箇所を開くボタン (見た目はリンク) */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--accent-hover);
+}
+
+/* 用語の説明 */
+.glossary dt {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 12px;
+}
+
+.glossary dt:first-child {
+  margin-top: 0;
+}
+
+.glossary dd {
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
 /* --- Measurement Mode Selector --- */
 .mode-selector {
   display: flex;

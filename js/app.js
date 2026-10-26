@@ -44,6 +44,11 @@ const App = (() => {
         document.getElementById('guidePrev')?.addEventListener('click', UI.prevGuideStep);
         document.getElementById('guideNext')?.addEventListener('click', UI.nextGuideStep);
 
+        // 本文中の「用語の説明」などのボタン: data-help の見出しを含むヘルプのステップを開く
+        document.querySelectorAll('[data-help]').forEach(btn => {
+            btn.addEventListener('click', () => UI.openHelp(btn.dataset.help));
+        });
+
         // モーダルを閉じる
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
