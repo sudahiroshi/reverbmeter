@@ -1261,6 +1261,21 @@ body {
   font-family: var(--font-mono);
 }
 
+/* 測定音の試聴 */
+.tsp-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.tsp-preview-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
 /* --- IR測定条件 --- */
 .ir-info {
   margin-top: 4px;

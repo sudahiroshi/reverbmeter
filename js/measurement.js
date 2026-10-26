@@ -18,6 +18,11 @@ const Measurement = (() => {
     let levelCallback = null;
     let statusCallback = null;
     let waveformCallback = null;
+    let preview = null;              // 再生中の試聴 { ctx, source, gain, onEnded }
+
+    // 試聴設定
+    const PREVIEW_FADE_IN_SEC = 0.3;   // 急に大きな音が出ないよう、冒頭を徐々に大きくする
+    const PREVIEW_FADE_OUT_SEC = 0.03; // 途中で止めたときのクリック音を避ける
 
     // 録音設定
     const SAMPLE_RATE = 44100;
@@ -415,6 +420,81 @@ const Measurement = (() => {
     }
 
     /**
+     * 測定で鳴らすピンクTSPを、マイクを使わずに1周期だけ再生する (試聴)
+     * 信号は測定と同じ PinkTSP.generate で作り、測定と同じ再生ゲインで鳴らす
+     * @param {object} options - startPinkTspMeasurement と同じパラメータ
+     * @param {Function} onEnded - 再生が終わった、または停止したときに呼ぶ
+     * @returns {{durationSec: number, repeats: number}|null} 再生できなかったときは null
+     */
+    function startPreview(options, onEnded) {
+        if (isMeasuring || preview) return null;
+
+        // マイク初期化済みならその AudioContext を使い、未初期化なら再生専用に作る
+        const ownsContext = !audioCtx;
+        const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(err => console.warn('試聴の AudioContext を再開できません:', err));
+        }
+
+        const tsp = PinkTSP.generate(ctx.sampleRate, options);
+        const buffer = ctx.createBuffer(1, tsp.length, ctx.sampleRate);
+        buffer.getChannelData(0).set(tsp.signal);
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        const gain = ctx.createGain();
+        const t0 = ctx.currentTime;
+        gain.gain.setValueAtTime(0, t0);
+        gain.gain.linearRampToValueAtTime(tsp.params.playbackGain, t0 + PREVIEW_FADE_IN_SEC);
+        source.connect(gain);
+        gain.connect(ctx.destination);
+
+        const current = { ctx, source, gain, onEnded };
+        source.onended = () => {
+            source.disconnect();
+            gain.disconnect();
+            if (ownsContext) ctx.close();
+            endPreview(current);
+        };
+        preview = current;
+        source.start(t0);
+
+        // 測定では (同期加算回数 + 2) 周期くり返して再生する
+        return { durationSec: buffer.duration, repeats: tsp.params.averages + 2 };
+    }
+
+    /**
+     * 試聴を止める (再生していなければ何もしない)
+     */
+    function stopPreview() {
+        if (!preview) return;
+        const { ctx, source, gain } = preview;
+        const t = ctx.currentTime;
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setValueAtTime(gain.gain.value, t);
+        gain.gain.linearRampToValueAtTime(0, t + PREVIEW_FADE_OUT_SEC);
+        source.stop(t + PREVIEW_FADE_OUT_SEC);
+        // 後片付けは onended で行う。表示はすぐ戻す
+        endPreview(preview);
+    }
+
+    /**
+     * 試聴の終了を記録し、呼び出し元へ知らせる (同じ試聴について一度だけ)
+     */
+    function endPreview(target) {
+        if (preview !== target) return;
+        preview = null;
+        if (target.onEnded) target.onEnded();
+    }
+
+    /**
+     * 試聴中かどうか
+     */
+    function getIsPreviewing() {
+        return !!preview;
+    }
+
+    /**
      * インパルス応答方式(手拍子など)の録音を解析
      */
     function analyzeImpulseResponse(rawData, sampleRate) {
@@ -577,6 +657,9 @@ const Measurement = (() => {
         startImpulseMeasurement,
         startPinkTspMeasurement,
         getLastTsp,
+        startPreview,
+        stopPreview,
+        getIsPreviewing,
         stopMeasurement,
         setMode,
         getMode,

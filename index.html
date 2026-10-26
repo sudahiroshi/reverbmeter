@@ -123,6 +123,14 @@
             <span class="setting-label">測定時間の目安</span>
             <span class="setting-value" id="tspEstimate">--</span>
           </div>
+          <!-- 測定音の試聴 (マイクは使わず、いまの設定の測定音を1周期だけ鳴らす) -->
+          <div class="tsp-preview">
+            <button type="button" id="tspPreviewBtn" class="btn btn-outline btn-sm">▶ 測定音を試聴</button>
+            <span id="tspPreviewStatus" class="tsp-preview-status" role="status"></span>
+          </div>
+          <p class="guide-note">
+            🔈 試聴は測定と同じ大きさで鳴ります。はじめは端末の音量を小さめにして試聴し、少しずつ上げてください。
+          </p>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
             ⚠️ ピンクTSPがスピーカーから再生されます。音量にご注意ください。<br>
             ピンク特性はオクターブあたりのエネルギーが一定になるため、低域のS/Nを確保しやすくなります。

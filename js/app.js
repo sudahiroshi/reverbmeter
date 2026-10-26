@@ -21,6 +21,8 @@ const App = (() => {
         // タブナビゲーション
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                // 試聴の停止ボタンは測定タブにしか無いため、タブを移るときは止める
+                Measurement.stopPreview();
                 UI.switchTab(btn.dataset.tab);
             });
         });
@@ -75,6 +77,7 @@ const App = (() => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                Measurement.stopPreview();
                 Measurement.setMode(btn.dataset.mode);
                 UI.setMeasureMode(btn.dataset.mode);
 
@@ -103,6 +106,9 @@ const App = (() => {
             document.getElementById(id)?.addEventListener('change', updateTspEstimate);
         });
         updateTspEstimate();
+
+        // 測定音の試聴
+        document.getElementById('tspPreviewBtn')?.addEventListener('click', togglePreview);
 
         // 再測定ボタン: 測定タブへ戻り、測定前チェックリストを開いて見直せるようにする
         document.getElementById('remeasureBtn')?.addEventListener('click', () => {
@@ -185,6 +191,10 @@ const App = (() => {
             });
         }
 
+        // 試聴の音が録音に混ざらないよう、測定を始める直前に止める
+        // (マイク許可の表示中に試聴が始められるため、マイク初期化の後で止める)
+        Measurement.stopPreview();
+
         const mode = Measurement.getMode();
         let result = null;
 
@@ -223,6 +233,23 @@ const App = (() => {
                 title: '測定に失敗しました',
                 body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
             });
+        }
+    }
+
+    /**
+     * 測定音の試聴を開始・停止する
+     */
+    function togglePreview() {
+        if (Measurement.getIsPreviewing()) {
+            Measurement.stopPreview();
+            return;
+        }
+        try {
+            const playing = Measurement.startPreview(getTspOptions(), () => UI.setPreviewPlaying(null));
+            if (playing) UI.setPreviewPlaying(playing);
+        } catch (err) {
+            console.error('試聴エラー:', err);
+            UI.showToast('測定音を再生できませんでした', 'error');
         }
     }
 

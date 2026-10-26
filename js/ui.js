@@ -370,6 +370,25 @@ const UI = (() => {
             measureBtn.classList.remove('recording', 'processing');
             if (s.btnClass) measureBtn.classList.add(s.btnClass);
         }
+
+        // 測定中 (待機・録音・再生・解析) は試聴できないようにする
+        const previewBtn = document.getElementById('tspPreviewBtn');
+        if (previewBtn) previewBtn.disabled = !!s.btnClass;
+    }
+
+    /**
+     * 測定音の試聴ボタンと状態表示を切り替える
+     * @param {{durationSec: number, repeats: number}|null} playing - 再生中の情報。null なら停止状態
+     */
+    function setPreviewPlaying(playing) {
+        const btn = document.getElementById('tspPreviewBtn');
+        const status = document.getElementById('tspPreviewStatus');
+        if (btn) btn.textContent = playing ? '■ 停止' : '▶ 測定音を試聴';
+        if (status) {
+            status.textContent = playing
+                ? `🔊 再生中…（約${playing.durationSec.toFixed(1)}秒。測定ではこの音を${playing.repeats}回くり返します）`
+                : '';
+        }
     }
 
     /**
@@ -624,6 +643,7 @@ const UI = (() => {
         answerConfirm,
         handleConfirmKeydown,
         updateMeasureStatus,
+        setPreviewPlaying,
         displayResults,
         updateDataList
     };
