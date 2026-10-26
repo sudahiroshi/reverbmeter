@@ -459,8 +459,9 @@ const Measurement = (() => {
         preview = current;
         source.start(t0);
 
-        // 測定では (同期加算回数 + 2) 周期くり返して再生する
-        return { durationSec: buffer.duration, repeats: tsp.params.averages + 2 };
+        // 測定では (同期加算回数 + 2) 周期を予約するが、録音が (同期加算回数 + 1) 周期そろった時点で止めるため、
+        // 実際に鳴るのは (同期加算回数 + 1) 周期 (+ 入出力のレイテンシ分)
+        return { durationSec: buffer.duration, repeats: tsp.params.averages + 1 };
     }
 
     /**
@@ -642,6 +643,13 @@ const Measurement = (() => {
     }
 
     /**
+     * 測定・試聴で使うサンプリング周波数 (マイク初期化前は AudioContext に要求する値)
+     */
+    function getSampleRate() {
+        return audioCtx ? audioCtx.sampleRate : SAMPLE_RATE;
+    }
+
+    /**
      * AudioContextを取得
      */
     function getAudioContext() {
@@ -664,6 +672,7 @@ const Measurement = (() => {
         setMode,
         getMode,
         getIsMeasuring,
+        getSampleRate,
         getAudioContext
     };
 })();

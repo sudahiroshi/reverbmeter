@@ -189,6 +189,8 @@ const App = (() => {
                 return;
             }
             micInitialized = true;
+            // 実際のサンプリング周波数が要求値と違う場合に備えて、目安を測り直す
+            updateTspEstimate();
 
             // レベルメーター開始
             Measurement.startLevelMeter((db, rms) => {
@@ -287,7 +289,7 @@ const App = (() => {
     /**
      * ピンクTSPの測定時間の目安を表示する
      * 実際の信号長はAudioContextのサンプリングレートで決まるので、
-     * マイク未初期化のうちは48kHz想定で概算する
+     * マイク未初期化のうちは測定・試聴と同じ要求値 (Measurement.getSampleRate) で概算する
      */
     function updateTspEstimate() {
         const el = document.getElementById('tspEstimate');
@@ -295,11 +297,12 @@ const App = (() => {
         if (!el) return;
 
         const opts = getTspOptions();
-        const sampleRate = Measurement.getAudioContext()?.sampleRate || 48000;
+        const sampleRate = Measurement.getSampleRate();
 
         // 信号長は2の冪サンプルに丸められるため、丸めた後の長さで見積もる
         const signalSec = Math.pow(2, Math.round(Math.log2(sampleRate * opts.durationSec))) / sampleRate;
-        const total = signalSec * (opts.averages + 2); // 再生は 同期加算回数+2 周期
+        // 再生は (同期加算回数 + 2) 周期を予約するが、録音が (同期加算回数 + 1) 周期そろうと止まる
+        const total = signalSec * (opts.averages + 1);
 
         el.textContent = `約${total.toFixed(1)}秒 (信号長 ${signalSec.toFixed(2)}秒)`;
         if (guideEl) guideEl.textContent = `約${total.toFixed(1)}秒`;

@@ -386,7 +386,7 @@ const UI = (() => {
         if (btn) btn.textContent = playing ? '■ 停止' : '▶ 測定音を試聴';
         if (status) {
             status.textContent = playing
-                ? `🔊 再生中…（約${playing.durationSec.toFixed(1)}秒。測定ではこの音を${playing.repeats}回くり返します）`
+                ? `🔊 再生中…（約${playing.durationSec.toFixed(1)}秒。測定ではこの音を${playing.repeats}回続けて鳴らします）`
                 : '';
         }
     }

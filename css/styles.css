@@ -1377,6 +1377,25 @@ body {
   font-family: var(--font-mono);
 }
 
+/* ピンクTSP 設定の補助説明 */
+.setting-help {
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+.setting-help summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.setting-help .glossary {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
 /* 測定音の試聴 */
 .tsp-preview {
   display: flex;
