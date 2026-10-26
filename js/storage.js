@@ -8,12 +8,19 @@ const Storage = (() => {
 
     /**
      * 全データを取得
+     * LocalStorage は外から書き換えられるため、配列でなければ空とみなし、
+     * オブジェクトでない要素 (null など。識別も表示もできない) は除く
      * @returns {Array} 保存済みデータの配列
      */
     function getAll() {
         try {
             const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : [];
+            const parsed = data ? JSON.parse(data) : [];
+            if (!Array.isArray(parsed)) {
+                console.warn('保存データが配列ではないため読み込めません');
+                return [];
+            }
+            return parsed.filter(isObject);
         } catch (e) {
             console.error('データの読み込みに失敗:', e);
             return [];
@@ -74,6 +81,16 @@ const Storage = (() => {
     }
 
     /**
+     * 保存データの結果を開ける形か (result と全帯域の結果 result.overall があるか)
+     * 帯域別・EDC・数値の欠けは、表示や書き出しの側で N/A や非表示にする
+     * @param {object} entry
+     * @returns {boolean}
+     */
+    function isReadable(entry) {
+        return isObject(entry) && isObject(entry.result) && isObject(entry.result.overall);
+    }
+
+    /**
      * IDでデータを取得
      * @param {string} id
      * @returns {object|null}
@@ -117,6 +134,8 @@ const Storage = (() => {
      */
     function toCSV(entry) {
         const lines = [];
+        const overall = entry.result.overall;
+        const bands = isObject(entry.result.bands) ? entry.result.bands : {};
 
         // ヘッダー
         lines.push('# 残響測定結果');
@@ -127,34 +146,31 @@ const Storage = (() => {
         // 全体のRT60
         lines.push('# 全帯域');
         lines.push('パラメータ,値');
-        if (entry.result.overall) {
-            lines.push(`RT60,${formatValue(entry.result.overall.rt60)} s`);
-            lines.push(`EDT,${formatValue(entry.result.overall.edt)} s`);
-            lines.push(`R²,${entry.result.overall.r2 ? entry.result.overall.r2.toFixed(4) : 'N/A'}`);
-        }
+        lines.push(`RT60,${formatValue(overall.rt60)} s`);
+        lines.push(`EDT,${formatValue(overall.edt)} s`);
+        lines.push(`R²,${formatValue(overall.r2, 4)}`);
         lines.push('');
 
         // バンドごとのRT60
         lines.push('# 周波数帯別');
         lines.push('周波数(Hz),RT60(s),EDT(s),R²,有効');
-        if (entry.result.bands) {
-            for (const [freq, band] of Object.entries(entry.result.bands)) {
-                lines.push([
-                    freq,
-                    formatValue(band.rt60),
-                    formatValue(band.edt),
-                    band.r2 ? band.r2.toFixed(4) : 'N/A',
-                    band.valid ? 'Yes' : 'No'
-                ].join(','));
-            }
+        for (const [freq, band] of Object.entries(bands)) {
+            if (!isObject(band)) continue;
+            lines.push([
+                freq,
+                formatValue(band.rt60),
+                formatValue(band.edt),
+                formatValue(band.r2, 4),
+                band.valid ? 'Yes' : 'No'
+            ].join(','));
         }
         lines.push('');
 
         // EDCデータ
-        if (entry.result.overall && entry.result.overall.edc) {
+        const edc = overall.edc;
+        if (isObject(edc) && Array.isArray(edc.times) && Array.isArray(edc.values)) {
             lines.push('# エネルギー減衰曲線 (EDC)');
             lines.push('時間(s),レベル(dB)');
-            const edc = entry.result.overall.edc;
             for (let i = 0; i < edc.times.length; i++) {
                 lines.push(`${edc.times[i]},${edc.values[i]}`);
             }
@@ -187,16 +203,18 @@ const Storage = (() => {
         lines.push('名前,日時,RT60全帯域(s),EDT全帯域(s),125Hz,250Hz,500Hz,1kHz,2kHz,4kHz');
 
         entries.forEach(entry => {
+            const overall = entry.result.overall;
+            const bands = isObject(entry.result.bands) ? entry.result.bands : {};
             const row = [
                 `"${entry.name}"`,
                 formatDate(entry.date),
-                entry.result.overall ? formatValue(entry.result.overall.rt60) : 'N/A',
-                entry.result.overall ? formatValue(entry.result.overall.edt) : 'N/A'
+                formatValue(overall.rt60),
+                formatValue(overall.edt)
             ];
 
             [125, 250, 500, 1000, 2000, 4000].forEach(freq => {
-                const band = entry.result.bands ? entry.result.bands[freq] : null;
-                row.push(band && band.valid ? formatValue(band.rt60) : 'N/A');
+                const band = bands[freq];
+                row.push(isObject(band) && band.valid ? formatValue(band.rt60) : 'N/A');
             });
 
             lines.push(row.join(','));
@@ -225,27 +243,35 @@ const Storage = (() => {
 
     /**
      * 1件のデータをエクスポート
+     * CSV は結果を開ける項目だけ。JSON は保存内容をそのまま書き出す (壊れた項目の中身を取り出せるように)
+     * @returns {boolean} 書き出したか
      */
     function exportSingle(id, format) {
         const entry = getById(id);
-        if (!entry) return;
+        if (!entry || (format === 'csv' && !isReadable(entry))) return false;
 
-        const timestamp = new Date(entry.date).toISOString().slice(0, 10);
-        const safeName = entry.name.replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_');
+        // 日時や名前が欠けた保存データでも、ファイル名を組み立てられるようにする
+        const date = new Date(entry.date);
+        const timestamp = (isNaN(date) ? new Date() : date).toISOString().slice(0, 10);
+        const safeName = String(entry.name ?? '').replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g, '_') || 'measurement';
 
         if (format === 'csv') {
             downloadFile(toCSV(entry), `${safeName}_${timestamp}.csv`, 'text/csv;charset=utf-8');
         } else {
             downloadFile(toJSON(entry), `${safeName}_${timestamp}.json`, 'application/json');
         }
+        return true;
     }
 
     /**
      * 複数データをエクスポート
+     * CSV は結果を開けない項目を除く。JSON は保存内容をそのまま書き出す
+     * @returns {number} 書き出した件数
      */
     function exportMultiple(ids, format) {
-        const entries = ids.map(id => getById(id)).filter(Boolean);
-        if (entries.length === 0) return;
+        const entries = ids.map(id => getById(id))
+            .filter(entry => entry && (format !== 'csv' || isReadable(entry)));
+        if (entries.length === 0) return 0;
 
         const timestamp = new Date().toISOString().slice(0, 10);
 
@@ -259,6 +285,7 @@ const Storage = (() => {
             }));
             downloadFile(JSON.stringify(exported, null, 2), `measurements_${timestamp}.json`, 'application/json');
         }
+        return entries.length;
     }
 
     // --- ユーティリティ ---
@@ -269,6 +296,7 @@ const Storage = (() => {
 
     function formatDate(isoString) {
         const d = new Date(isoString);
+        if (isNaN(d)) return '日時不明';
         return d.toLocaleString('ja-JP', {
             year: 'numeric',
             month: '2-digit',
@@ -278,13 +306,17 @@ const Storage = (() => {
         });
     }
 
-    function formatValue(v) {
-        if (v === null || v === undefined || isNaN(v)) return 'N/A';
-        return v.toFixed(3);
+    function formatValue(v, digits = 3) {
+        return Number.isFinite(v) ? v.toFixed(digits) : 'N/A';
+    }
+
+    function isObject(v) {
+        return typeof v === 'object' && v !== null && !Array.isArray(v);
     }
 
     return {
         getAll,
+        isReadable,
         save,
         getById,
         deleteById,

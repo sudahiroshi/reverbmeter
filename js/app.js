@@ -400,6 +400,10 @@ const App = (() => {
     async function viewResult(id) {
         const entry = Storage.getById(id);
         if (!entry) return;
+        if (!Storage.isReadable(entry)) {
+            UI.showToast('この保存データは壊れているため開けません', 'error');
+            return;
+        }
 
         if (hasUnsavedResult() && !await UI.confirm({
             title: '保存していない測定結果があります',
@@ -473,8 +477,11 @@ const App = (() => {
      * 1件エクスポート
      */
     function exportSingle(id, format) {
-        Storage.exportSingle(id, format);
-        UI.showToast(`${format.toUpperCase()}ファイルをダウンロードしました`, 'success');
+        if (Storage.exportSingle(id, format)) {
+            UI.showToast(`${format.toUpperCase()}ファイルをダウンロードしました`, 'success');
+        } else {
+            UI.showToast('この保存データは書き出せません', 'error');
+        }
     }
 
     /**
@@ -488,8 +495,15 @@ const App = (() => {
         }
 
         const ids = Array.from(checked).map(cb => cb.value);
-        Storage.exportMultiple(ids, format);
-        UI.showToast(`${ids.length}件を${format.toUpperCase()}でエクスポートしました`, 'success');
+        const count = Storage.exportMultiple(ids, format);
+        // CSV は結果を開けない (壊れた) 保存データを除いて書き出す
+        const skipped = ids.length - count;
+        if (count === 0) {
+            UI.showToast(`選択した項目は壊れているため${format.toUpperCase()}に書き出せません`, 'error');
+            return;
+        }
+        UI.showToast(`${count}件を${format.toUpperCase()}でエクスポートしました` +
+            (skipped > 0 ? `（壊れた${skipped}件は除きました）` : ''), 'success');
     }
 
     /**

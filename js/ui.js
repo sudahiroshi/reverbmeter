@@ -418,7 +418,7 @@ const UI = (() => {
         }
 
         if (r2El) {
-            const r2 = overall.r2 || 0;
+            const r2 = Number.isFinite(overall.r2) ? overall.r2 : 0;
             r2El.innerHTML = `${(r2 * 100).toFixed(1)}<span class="unit">%</span>`;
         }
 
@@ -441,21 +441,31 @@ const UI = (() => {
             irCard.style.display = 'none';
         }
 
-        // EDCグラフ
-        if (overall.edc && overall.edc.times.length > 0) {
-            Visualization.drawEDCChart('edcChart', overall.edc);
-        }
+        // EDC・帯域別グラフ: 保存データでこれらが欠けているときは、前の結果のグラフが残らないようカードごと隠す
+        const edc = overall.edc;
+        const hasEdc = !!edc && Array.isArray(edc.times) && Array.isArray(edc.values) && edc.times.length > 0;
+        setChartCardVisible('edcChart', hasEdc);
+        if (hasEdc) Visualization.drawEDCChart('edcChart', edc);
 
-        // バンドグラフ
-        if (result.bands && Object.keys(result.bands).length > 0) {
-            Visualization.drawBandChart('bandChart', result.bands);
-        }
+        const bands = Object.fromEntries(Object.entries(result.bands || {})
+            .filter(([, band]) => band && typeof band === 'object'));
+        const hasBands = Object.keys(bands).length > 0;
+        setChartCardVisible('bandChart', hasBands);
+        if (hasBands) Visualization.drawBandChart('bandChart', bands);
 
         // 結果プレースホルダーを非表示
         const placeholder = document.getElementById('resultPlaceholder');
         const resultContent = document.getElementById('resultContent');
         if (placeholder) placeholder.style.display = 'none';
         if (resultContent) resultContent.style.display = 'block';
+    }
+
+    /**
+     * グラフのカードの表示を切り替える
+     */
+    function setChartCardVisible(canvasId, visible) {
+        const card = document.getElementById(canvasId)?.closest('.card');
+        if (card) card.style.display = visible ? '' : 'none';
     }
 
     /**
@@ -474,7 +484,7 @@ const UI = (() => {
         }
 
         // 理由は有効判定 (AudioUtils.calculateRT60) と同じ条件で挙げる
-        const r2 = overall.r2 || 0;
+        const r2 = Number.isFinite(overall.r2) ? overall.r2 : 0;
         const reasons = [];
         if (!Number.isFinite(overall.rt60) || overall.rt60 <= 0) {
             reasons.push('減衰が十分に録音できず、RT60 を算出できませんでした。');
@@ -581,8 +591,8 @@ const UI = (() => {
             li.className = 'data-item';
             li.dataset.id = id;
 
-            try {
-                const rt60 = item.result && item.result.overall && Number.isFinite(item.result.overall.rt60)
+            if (Storage.isReadable(item)) {
+                const rt60 = Number.isFinite(item.result.overall.rt60)
                     ? item.result.overall.rt60.toFixed(3) + 's'
                     : 'N/A';
 
@@ -601,13 +611,16 @@ const UI = (() => {
                 <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
               </div>
             `;
-            } catch (err) {
-                console.warn('データ項目の描画エラー:', item, err);
+            } else {
+                // 結果が無い・壊れている項目は開けないため、どれか分かるよう名前と日時を添えて選択・削除だけできるようにする
                 li.innerHTML = `
               <input type="checkbox" class="data-checkbox" aria-label="選択">
               <div class="data-item-info">
-                <div class="data-item-name">⚠️ 破損データ</div>
-                <div class="data-item-meta"><span>読み込めません</span></div>
+                <div class="data-item-name">⚠️ 破損データ: ${escapeHtml(item.name || '名前なし')}</div>
+                <div class="data-item-meta">
+                  <span>${Storage.formatDate(item.date)}</span>
+                  <span>結果を読み込めません</span>
+                </div>
               </div>
               <div class="data-item-actions">
                 <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
