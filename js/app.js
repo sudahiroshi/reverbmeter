@@ -8,6 +8,7 @@ const App = (() => {
     let currentSavedId = null; // currentResult を保存した (または開いた) 保存データのID
     let suggestedName = '';    // 保存欄に入れた測定名の既定値
     let micInitialized = false;
+    let stopRequested = false; // 進行中の測定を利用者が停止ボタンで止めたか (測定の結果なしを失敗と区別する)
 
     /*
      * レベルメーターの適正範囲 (dBFS)。メーターの帯と凡例の数値はここから作る (README の表も同じ値)
@@ -201,6 +202,7 @@ const App = (() => {
      */
     async function startMeasurement() {
         if (Measurement.getIsMeasuring()) {
+            stopRequested = true;
             Measurement.stopMeasurement();
             return;
         }
@@ -240,6 +242,7 @@ const App = (() => {
 
         const mode = Measurement.getMode();
         let result = null;
+        stopRequested = false;
 
         try {
             if (mode === 'tsp') {
@@ -272,7 +275,9 @@ const App = (() => {
             setTimeout(() => {
                 UI.switchTab('results');
             }, 1000);
-        } else {
+        } else if (!stopRequested) {
+            // 利用者が止めたときは失敗ではないので案内しない
+            // (待機のタイムアウトなど Measurement の中で結果なしに終わったときは、従来どおり案内する)
             UI.showMeasureAlert({
                 title: '測定に失敗しました',
                 body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
