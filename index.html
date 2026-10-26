@@ -180,6 +180,10 @@
           <li data-only="tsp">スピーカーから測定音が<span id="guideTspTime">数秒</span>鳴ります。鳴り終わるまで動かず静かにする</li>
           <li>解析が終わると「結果」タブに切り替わります</li>
         </ol>
+        <p class="guide-note guide-privacy">
+          🔒 録音した音声は端末の中で解析するだけで、送信も保存もしません（保存されるのは解析結果だけです）。
+          <button type="button" class="link-btn" data-help="helpPrivacy">詳しく</button>
+        </p>
 
         <div class="measure-btn-container">
           <button id="measureBtn" class="measure-btn" aria-label="測定開始">
@@ -402,6 +406,15 @@
           <p>
             マイクは https:// で始まるページでのみ使えます（PCで動作を試す場合は http://localhost も可）。
           </p>
+
+          <!-- 保存内容は js/storage.js の save()、送信処理が無いことは js/ 全体で確認している -->
+          <h3 id="helpPrivacy">🔒 録音した音声の扱い</h3>
+          <ul>
+            <li>録音した音声は、この端末のブラウザの中だけで解析します。録音した音声や測定結果を外部へ送信することはありません。</li>
+            <li>録音した音声と、そこから求めたインパルス応答の波形は保存しません。解析と結果の表示のためにページを開いている間だけメモリ上に置かれ、ページを閉じるか再読み込みすると消えます。</li>
+            <li>「保存」を押したときに保存されるのは、測定名・日時と、解析結果の数値（RT60・EDT・R²・有効性・周波数帯別の値・サンプリング周波数・IR長）、グラフ用に間引いた減衰曲線（EDC）だけです。保存先はこのブラウザの LocalStorage で、ほかの端末やブラウザからは見えません。ほかにテーマの設定と、初回のヘルプを表示したかどうかを保存します。</li>
+            <li>マイクは最初に「開始」を押してから、入力レベルを表示するためにページを閉じるまで使い続けます。録音して解析するのは測定中だけです。</li>
+          </ul>
         </section>
 
         <section class="guide-step" data-step="2" hidden>

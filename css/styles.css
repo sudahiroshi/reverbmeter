@@ -352,6 +352,11 @@ body {
   margin-bottom: 4px;
 }
 
+/* 手順の直下に置くため、手順の下余白を詰めて手順とひとまとまりに見せる */
+.guide-steps + .guide-privacy {
+  margin: -12px 0 20px;
+}
+
 .guide-note {
   font-size: 0.8rem;
   color: var(--text-muted);
