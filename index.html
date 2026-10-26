@@ -449,6 +449,23 @@
     </div>
   </div>
 
+  <!-- ===== 確認ダイアログ (削除や未保存の結果を失う操作の前に UI.confirm で開く) ===== -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <div class="modal-header">
+        <h2 id="confirmTitle" class="modal-title"></h2>
+        <button type="button" class="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirmCancel" class="btn btn-outline btn-sm">キャンセル</button>
+        <button type="button" id="confirmOk" class="btn btn-danger btn-sm"></button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== トースト ===== -->
   <div id="toastContainer" class="toast-container"></div>
 

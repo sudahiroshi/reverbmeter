@@ -5,6 +5,7 @@
 
 const App = (() => {
     let currentResult = null;
+    let currentSavedId = null; // currentResult を保存した (または開いた) 保存データのID
     let micInitialized = false;
 
     /**
@@ -54,6 +55,19 @@ const App = (() => {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) UI.closeModal(overlay.id);
             });
+        });
+
+        // 確認ダイアログ
+        document.getElementById('confirmOk')?.addEventListener('click', () => UI.answerConfirm(true));
+        document.getElementById('confirmCancel')?.addEventListener('click', () => UI.answerConfirm(false));
+        document.addEventListener('keydown', UI.handleConfirmKeydown);
+
+        // 未保存の測定結果はメモリにしか無いため、再読み込みや閉じる前に確認する
+        // (この場面ではアプリ内のダイアログを出せず、ブラウザ標準の確認になる)
+        window.addEventListener('beforeunload', (e) => {
+            if (!hasUnsavedResult()) return;
+            e.preventDefault();
+            e.returnValue = '';
         });
 
         // 測定モード切替
@@ -146,6 +160,12 @@ const App = (() => {
             return;
         }
 
+        if (hasUnsavedResult() && !await UI.confirm({
+            title: '保存していない測定結果があります',
+            message: '新しい測定が終わると、いまの測定結果は置き換わり、元に戻せません。残したい場合は「キャンセル」を押し、結果タブで保存してください。',
+            okLabel: '保存せずに測定する'
+        })) return;
+
         // 前回のエラー案内は、測定をやり直す時点で消す
         UI.clearMeasureAlert();
 
@@ -185,6 +205,7 @@ const App = (() => {
 
         if (result) {
             currentResult = result;
+            currentSavedId = null;
             UI.displayResults(result);
 
             if (result.ir && result.ir.clipped) {
@@ -290,7 +311,7 @@ const App = (() => {
         }
 
         try {
-            Storage.save(name, currentResult);
+            currentSavedId = Storage.save(name, currentResult);
             UI.showToast(`「${name}」を保存しました`, 'success');
             if (nameInput) nameInput.value = '';
             UI.updateDataList();
@@ -302,11 +323,18 @@ const App = (() => {
     /**
      * 保存済みの結果を表示
      */
-    function viewResult(id) {
+    async function viewResult(id) {
         const entry = Storage.getById(id);
         if (!entry) return;
 
+        if (hasUnsavedResult() && !await UI.confirm({
+            title: '保存していない測定結果があります',
+            message: '保存データを開くと、いまの測定結果は置き換わり、元に戻せません。残したい場合は「キャンセル」を押し、結果タブで保存してください。',
+            okLabel: '保存せずに開く'
+        })) return;
+
         currentResult = entry.result;
+        currentSavedId = id;
         currentResult.overall = entry.result.overall;
         currentResult.bands = entry.result.bands;
 
@@ -317,25 +345,40 @@ const App = (() => {
     /**
      * 1件削除
      */
-    function deleteSingle(id) {
-        if (!UI.confirm('この測定データを削除しますか？')) return;
+    async function deleteSingle(id) {
+        if (!await UI.confirm({
+            title: 'この測定データを削除しますか？',
+            message: '削除したデータは元に戻せません。',
+            okLabel: '削除する'
+        })) return;
 
+        const index = Storage.getAll().findIndex(item => item.id === id);
         Storage.deleteById(id);
         UI.updateDataList();
+
+        // 押した削除ボタンは再描画で消えるため、同じ位置の行 (無ければ「すべて選択」) へフォーカスを移す
+        const deleteButtons = document.querySelectorAll('#dataList .btn-icon-sm.delete');
+        const next = deleteButtons[Math.min(index, deleteButtons.length - 1)] || document.getElementById('selectAll');
+        next?.focus();
+
         UI.showToast('削除しました', 'success');
     }
 
     /**
      * 選択した項目を削除
      */
-    function deleteSelected() {
+    async function deleteSelected() {
         const checked = document.querySelectorAll('.data-checkbox:checked');
         if (checked.length === 0) {
             UI.showToast('削除する項目を選択してください', 'error');
             return;
         }
 
-        if (!UI.confirm(`${checked.length}件のデータを削除しますか？`)) return;
+        if (!await UI.confirm({
+            title: `${checked.length}件のデータを削除しますか？`,
+            message: '削除したデータは元に戻せません。',
+            okLabel: '削除する'
+        })) return;
 
         const ids = Array.from(checked).map(cb => cb.value);
         Storage.deleteByIds(ids);
@@ -369,6 +412,14 @@ const App = (() => {
         const ids = Array.from(checked).map(cb => cb.value);
         Storage.exportMultiple(ids, format);
         UI.showToast(`${ids.length}件を${format.toUpperCase()}でエクスポートしました`, 'success');
+    }
+
+    /**
+     * 表示中の測定結果が保存されていないか
+     * 保存後にその保存データを削除した場合も、結果はメモリにしか残らないので未保存とみなす
+     */
+    function hasUnsavedResult() {
+        return !!currentResult && !(currentSavedId && Storage.getById(currentSavedId));
     }
 
     /**

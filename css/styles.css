@@ -1022,6 +1022,15 @@ body {
   min-height: 0;
 }
 
+/* 確認ダイアログ */
+.confirm-modal {
+  max-width: 400px;
+}
+
+.confirm-modal .modal-body p {
+  margin-bottom: 0;
+}
+
 .guide-step[hidden] {
   display: none;
 }

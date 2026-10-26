@@ -6,6 +6,7 @@
 const UI = (() => {
     const THEME_KEY = 'reverberation_theme';
     let guideStep = 0; // ヘルプで表示中のステップ
+    let pendingConfirm = null; // 開いている確認ダイアログ { resolve, opener }
 
     /**
      * テーマを初期化
@@ -112,6 +113,11 @@ const UI = (() => {
      * モーダルを閉じる
      */
     function closeModal(modalId) {
+        // 確認ダイアログを × や背景クリックで閉じたときは、キャンセルとして結果を返す
+        if (modalId === 'confirmModal' && pendingConfirm) {
+            answerConfirm(false);
+            return;
+        }
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.classList.remove('active');
@@ -272,10 +278,68 @@ const UI = (() => {
     }
 
     /**
-     * 確認ダイアログ
+     * 確認ダイアログを開く。押されたボタンに応じて true (実行) / false (キャンセル) で解決する
+     * Esc・×・背景クリックはキャンセル扱い。閉じると開く前の要素へフォーカスを戻す
+     * @param {{title: string, message: string, okLabel: string}} options
+     * @returns {Promise<boolean>}
      */
-    function confirm(message) {
-        return window.confirm(message);
+    function confirm({ title, message, okLabel }) {
+        // 前の確認が開いたままなら、キャンセルとして閉じてから開き直す
+        if (pendingConfirm) answerConfirm(false);
+
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        document.getElementById('confirmOk').textContent = okLabel;
+
+        return new Promise(resolve => {
+            pendingConfirm = { resolve, opener: document.activeElement };
+            showModal('confirmModal');
+            // 削除など取り消せない操作なので、Enter を押しただけでは実行されないようキャンセル側を既定にする
+            document.getElementById('confirmCancel').focus();
+        });
+    }
+
+    /**
+     * 確認ダイアログを閉じて結果を返す
+     */
+    function answerConfirm(ok) {
+        if (!pendingConfirm) return;
+        const { resolve, opener } = pendingConfirm;
+        pendingConfirm = null;
+        closeModal('confirmModal');
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+        resolve(ok);
+    }
+
+    /**
+     * 確認ダイアログを開いている間のキー操作 (Esc で閉じる、Tab はダイアログ内で循環させる)
+     */
+    function handleConfirmKeydown(e) {
+        if (!pendingConfirm) return;
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            answerConfirm(false);
+            return;
+        }
+        if (e.key !== 'Tab') return;
+
+        const modal = document.querySelector('#confirmModal .modal');
+        const focusable = Array.from(modal.querySelectorAll('button:not([disabled])'));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (!modal.contains(active)) {
+            e.preventDefault();
+            first.focus();
+        } else if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+        }
     }
 
     /**
@@ -557,6 +621,8 @@ const UI = (() => {
         nextGuideStep,
         prevGuideStep,
         confirm,
+        answerConfirm,
+        handleConfirmKeydown,
         updateMeasureStatus,
         displayResults,
         updateDataList
