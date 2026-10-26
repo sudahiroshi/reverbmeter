@@ -132,7 +132,17 @@
 - ヘルプは初回表示と❓で同じモーダルを使い、4ステップに分けた。初回表示のキーは既存の
   `reverberation_visited` のままなので、既存利用者には自動表示されない。
 - 既知の制限（今回のスコープ外）:
-  - 保存済みデータで RT60 が null のものを結果タブで開くと、既存の displayResults が
-    `null.toFixed` で例外になる（`!isNaN(null)` が true のため）。
-  - showToast は innerHTML で文言を挿入するため、保存名に HTML を入れるとそのまま解釈される（自分の入力のみ）。
   - iPhone 実機・Safari・Android での表示と、本物の非 HTTPS 環境での確認はしていない。
+
+---
+
+# 既存バグ2件の修正（main にも元からあった不具合）
+
+`fix/null-rt60-and-toast-escape`（PR #2）で `main` 向けに修正し、同じ修正をこのブランチにも取り込んだ。
+
+- [x] RT60 / EDT が null の保存データで結果表示が例外になる: `!isNaN(x)` を `Number.isFinite(x)` に変更
+  （結果タブの RT60・EDT、保存データ一覧の RT60）。一覧では「破損データ」と誤表示されていた
+- [x] showToast が message を HTML として挿入する: 既存の `escapeHtml` を通すようにした
+  （保存データ一覧の測定名は escapeHtml 済みで修正不要だった）
+- 検証: 修正前に `TypeError ... (reading 'toFixed')` とトースト内の `<b>` 要素生成を再現し、
+  修正後に N/A 表示とタグの文字列表示を確認。`tests/dsp-verify.js` 21件 PASS
