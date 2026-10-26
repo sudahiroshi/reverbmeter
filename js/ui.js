@@ -5,6 +5,7 @@
 
 const UI = (() => {
     const THEME_KEY = 'reverberation_theme';
+    let guideStep = 0; // ヘルプで表示中のステップ
 
     /**
      * テーマを初期化
@@ -70,6 +71,33 @@ const UI = (() => {
     }
 
     /**
+     * 測定タブの案内を測定モードに合わせる (data-only の項目の表示は CSS で切り替える)
+     */
+    function setMeasureMode(mode) {
+        const panel = document.getElementById('measure');
+        if (panel) panel.dataset.mode = mode;
+        updatePreCheckCount();
+    }
+
+    /**
+     * 測定前チェックリストの確認済み件数を更新する (表示中のモードの項目だけ数える)
+     */
+    function updatePreCheckCount() {
+        const panel = document.getElementById('measure');
+        const countEl = document.getElementById('preCheckCount');
+        if (!panel || !countEl) return;
+
+        const mode = panel.dataset.mode;
+        const items = Array.from(panel.querySelectorAll('.check-list li'))
+            .filter(li => !li.dataset.only || li.dataset.only === mode);
+        const checked = items.filter(li => li.querySelector('.pre-check').checked).length;
+        const done = checked === items.length;
+
+        countEl.textContent = `${done ? '✓ ' : ''}${checked} / ${items.length} 確認済み`;
+        countEl.classList.toggle('done', done);
+    }
+
+    /**
      * モーダルを表示
      */
     function showModal(modalId) {
@@ -115,6 +143,135 @@ const UI = (() => {
     }
 
     /**
+     * マイク初期化失敗の原因別の案内 (Measurement.initMicrophone の reason に対応)
+     */
+    const MIC_ERROR_GUIDES = {
+        'insecure': {
+            title: '安全な接続（HTTPS）で開かれていません',
+            body: 'ブラウザは https:// で始まるページでしかマイクを使えません。https:// のURLで開き直してください（PCで動作を試す場合は http://localhost でも使えます）。'
+        },
+        'denied': {
+            title: 'マイクの使用が許可されていません',
+            body: 'ブラウザのサイト設定でこのページのマイクを「許可」に変更し、ページを再読み込みしてから、もう一度「開始」を押してください。',
+            showPermissionHelp: true
+        },
+        'not-found': {
+            title: 'マイクが見つかりません',
+            body: 'マイクが接続されているか、OSのサウンド設定で入力デバイスが有効になっているかを確認し、もう一度「開始」を押してください。'
+        },
+        'other': {
+            title: 'マイクを開始できませんでした',
+            body: '通話・録音アプリなど、ほかのアプリがマイクを使っていないか確認してください。ページを再読み込みしてから、もう一度「開始」を押してください。',
+            showPermissionHelp: true
+        }
+    };
+
+    /**
+     * マイク初期化の失敗を原因別に案内する
+     * @param {{reason: string, errorName?: string}} mic - Measurement.initMicrophone の戻り値
+     */
+    function showMicError(mic) {
+        const guide = MIC_ERROR_GUIDES[mic.reason] || MIC_ERROR_GUIDES['other'];
+        showMeasureAlert({
+            title: guide.title,
+            body: guide.body,
+            detail: mic.errorName ? `エラー: ${mic.errorName}` : '',
+            action: guide.showPermissionHelp
+                ? { label: '端末別のマイク許可手順を見る', onClick: () => openHelp('helpMicPermission') }
+                : null
+        });
+    }
+
+    /**
+     * 測定カード内にエラー案内を表示する (トーストと違い、閉じるか次の測定まで残る)
+     * @param {{title: string, body: string, detail?: string, action?: {label: string, onClick: Function}}} alert
+     */
+    function showMeasureAlert({ title, body, detail = '', action = null }) {
+        const el = document.getElementById('measureAlert');
+        if (!el) return;
+
+        el.querySelector('.measure-alert-title').textContent = title;
+        el.querySelector('.measure-alert-body').textContent = body;
+
+        const detailEl = el.querySelector('.measure-alert-detail');
+        detailEl.textContent = detail;
+        detailEl.hidden = !detail;
+
+        const actionBtn = el.querySelector('.measure-alert-action');
+        actionBtn.hidden = !action;
+        actionBtn.onclick = action ? action.onClick : null;
+        if (action) actionBtn.textContent = action.label;
+
+        el.hidden = false;
+        el.scrollIntoView({ block: 'nearest' });
+    }
+
+    /**
+     * 測定カード内のエラー案内を消す
+     */
+    function clearMeasureAlert() {
+        const el = document.getElementById('measureAlert');
+        if (el) el.hidden = true;
+    }
+
+    /**
+     * ヘルプを開く。anchorId を指定すると、その見出しを含むステップを開いてスクロールする
+     */
+    function openHelp(anchorId) {
+        const anchor = anchorId ? document.getElementById(anchorId) : null;
+        const step = anchor?.closest('.guide-step');
+        showModal('helpModal');
+        showGuideStep(step ? Number(step.dataset.step) : 0);
+        if (anchor) anchor.scrollIntoView({ block: 'start' });
+    }
+
+    /**
+     * ヘルプの指定ステップ (0:概要 1:準備 2:測定 3:結果) を表示する
+     */
+    function showGuideStep(index) {
+        const modal = document.getElementById('helpModal');
+        if (!modal) return;
+
+        const steps = modal.querySelectorAll('.guide-step');
+        guideStep = Math.max(0, Math.min(steps.length - 1, index));
+        const isLast = guideStep === steps.length - 1;
+
+        steps.forEach((section, i) => { section.hidden = i !== guideStep; });
+        modal.querySelectorAll('.step-chip').forEach((chip, i) => {
+            chip.classList.toggle('active', i === guideStep);
+            if (i === guideStep) {
+                chip.setAttribute('aria-current', 'step');
+            } else {
+                chip.removeAttribute('aria-current');
+            }
+        });
+
+        document.getElementById('guidePrev').disabled = guideStep === 0;
+        document.getElementById('guideNext').textContent = isLast ? 'はじめる' : '次へ →';
+        document.getElementById('guideStepCount').textContent = `${guideStep + 1} / ${steps.length}`;
+        modal.querySelector('.modal-body').scrollTop = 0;
+    }
+
+    /**
+     * ヘルプの次のステップへ進む (最後のステップでは閉じる)
+     */
+    function nextGuideStep() {
+        const total = document.querySelectorAll('#helpModal .guide-step').length;
+        if (guideStep >= total - 1) {
+            closeModal('helpModal');
+        } else {
+            showGuideStep(guideStep + 1);
+        }
+    }
+
+    /**
+     * ヘルプの前のステップへ戻る
+     */
+    function prevGuideStep() {
+        showGuideStep(guideStep - 1);
+    }
+
+    /**
      * 確認ダイアログ
      */
     function confirm(message) {
@@ -131,7 +288,7 @@ const UI = (() => {
         const btnText = measureBtn?.querySelector('.btn-text');
 
         const statusMap = {
-            'idle': { text: '音源（手拍子・風船）を鳴らす準備ができたら開始', icon: '🎤', btnText: '開始', btnClass: '' },
+            'idle': { text: '準備ができたら「開始」を押してください', icon: '🎤', btnText: '開始', btnClass: '' },
             'waiting': { text: '💡 手拍子または風船を割ってください', icon: '👂', btnText: '待機中', btnClass: 'recording' },
             'recording': { text: '🔴 録音中...減衰を検出しています', icon: '⏺', btnText: '録音中', btnClass: 'recording' },
             'tsp-playing': { text: '🔊 ピンクTSPを再生中... 静かにしてください', icon: '📡', btnText: '測定中', btnClass: 'recording' },
@@ -188,6 +345,8 @@ const UI = (() => {
                 : `<span style="color:var(--warning)">△ 不確実</span>`;
         }
 
+        displayValidityAdvice(result);
+
         // インパルス応答グラフ (保存済みデータには含まれないため存在する場合のみ)
         const irCard = document.getElementById('irChart')?.closest('.card');
         if (result.plots && result.plots.irWave && result.plots.irWave.times.length > 0) {
@@ -214,6 +373,65 @@ const UI = (() => {
         const resultContent = document.getElementById('resultContent');
         if (placeholder) placeholder.style.display = 'none';
         if (resultContent) resultContent.style.display = 'block';
+    }
+
+    /**
+     * 「△ 不確実」またはクリッピングのとき、理由と改善方法を表示する
+     */
+    function displayValidityAdvice(result) {
+        const el = document.getElementById('validityAdvice');
+        if (!el) return;
+
+        const overall = result.overall;
+        const ir = result.ir;
+        const clipped = !!(ir && ir.clipped);
+        if (overall.valid && !clipped) {
+            el.hidden = true;
+            return;
+        }
+
+        // 理由は有効判定 (AudioUtils.calculateRT60) と同じ条件で挙げる
+        const r2 = overall.r2 || 0;
+        const reasons = [];
+        if (!Number.isFinite(overall.rt60) || overall.rt60 <= 0) {
+            reasons.push('減衰が十分に録音できず、RT60 を算出できませんでした。');
+        }
+        if (r2 <= 0.8) {
+            reasons.push(`適合度 R² が ${(r2 * 100).toFixed(1)}% で、有効の基準（80% を超えること）に届いていません。` +
+                '減衰曲線がまっすぐ下がっておらず、騒音や音の小ささの影響が考えられます。');
+        }
+        if (clipped) {
+            reasons.push(`入力がクリッピングしています（${(ir.clippingRatio * 100).toFixed(1)}%）。音が大きすぎて波形がひずんでいます。`);
+        }
+
+        const tips = ['窓とドアを閉め、エアコンや換気扇を止めて、静かな状態で測定する'];
+        if (result.method === 'impulse') {
+            tips.push('手拍子はマイクから1〜2m離れて、1回だけはっきり鳴らす（小さすぎると減衰を捉えられません）');
+        } else if (result.method === 'pink-tsp') {
+            tips.push(clipped
+                ? '端末の音量を下げる'
+                : '端末の音量を上げる。改善しない場合は、同期加算回数を増やすか信号長を長くする');
+            tips.push('スピーカーとマイクを手や物でふさがない');
+        }
+        tips.push('同じ場所で2〜3回測定し、値がそろうか確かめる');
+
+        el.querySelector('.result-advice-title').textContent = overall.valid
+            ? '⚠️ 注意が必要な結果です'
+            : '△ この結果は不確実です';
+        fillList(el.querySelector('.result-advice-reasons'), reasons);
+        fillList(el.querySelector('.result-advice-tips'), tips);
+        el.hidden = false;
+    }
+
+    /**
+     * 文字列の配列を <li> として ul に入れる
+     */
+    function fillList(ul, items) {
+        ul.replaceChildren(...items.map(text => {
+            const li = document.createElement('li');
+            li.textContent = text;
+            return li;
+        }));
     }
 
     /**
@@ -326,9 +544,18 @@ const UI = (() => {
         initTheme,
         toggleTheme,
         switchTab,
+        setMeasureMode,
+        updatePreCheckCount,
         showModal,
         closeModal,
         showToast,
+        showMicError,
+        showMeasureAlert,
+        clearMeasureAlert,
+        openHelp,
+        showGuideStep,
+        nextGuideStep,
+        prevGuideStep,
         confirm,
         updateMeasureStatus,
         displayResults,

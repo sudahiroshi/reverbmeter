@@ -31,8 +31,15 @@ const App = (() => {
 
         // ヘルプボタン
         document.getElementById('helpBtn')?.addEventListener('click', () => {
-            UI.showModal('helpModal');
+            UI.openHelp();
         });
+
+        // ヘルプのステップ切替
+        document.querySelectorAll('#helpModal .step-chip').forEach(chip => {
+            chip.addEventListener('click', () => UI.showGuideStep(Number(chip.dataset.step)));
+        });
+        document.getElementById('guidePrev')?.addEventListener('click', UI.prevGuideStep);
+        document.getElementById('guideNext')?.addEventListener('click', UI.nextGuideStep);
 
         // モーダルを閉じる
         document.querySelectorAll('.modal-close').forEach(btn => {
@@ -55,6 +62,7 @@ const App = (() => {
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 Measurement.setMode(btn.dataset.mode);
+                UI.setMeasureMode(btn.dataset.mode);
 
                 // ピンクTSP設定の表示切替
                 const tspSettings = document.getElementById('tspSettings');
@@ -64,14 +72,31 @@ const App = (() => {
             });
         });
 
+        // 測定前チェックリスト
+        document.querySelectorAll('.pre-check').forEach(cb => {
+            cb.addEventListener('change', UI.updatePreCheckCount);
+        });
+        UI.updatePreCheckCount();
+
         // 測定ボタン
         document.getElementById('measureBtn')?.addEventListener('click', startMeasurement);
+
+        // 測定エラーの案内を閉じる
+        document.querySelector('#measureAlert .measure-alert-close')?.addEventListener('click', UI.clearMeasureAlert);
 
         // ピンクTSP設定の変更で測定時間の目安を更新
         ['tspDuration', 'tspStartFreq', 'tspEndFreq', 'tspAverages'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', updateTspEstimate);
         });
         updateTspEstimate();
+
+        // 再測定ボタン: 測定タブへ戻り、測定前チェックリストを開いて見直せるようにする
+        document.getElementById('remeasureBtn')?.addEventListener('click', () => {
+            const preCheck = document.getElementById('preCheck');
+            if (preCheck) preCheck.open = true;
+            UI.switchTab('measure');
+            window.scrollTo(0, 0);
+        });
 
         // 保存ボタン
         document.getElementById('saveBtn')?.addEventListener('click', saveResult);
@@ -106,7 +131,7 @@ const App = (() => {
         // 初回訪問時にヘルプを表示
         if (!localStorage.getItem('reverberation_visited')) {
             setTimeout(() => {
-                UI.showModal('helpModal');
+                UI.openHelp();
                 localStorage.setItem('reverberation_visited', 'true');
             }, 500);
         }
@@ -121,12 +146,15 @@ const App = (() => {
             return;
         }
 
+        // 前回のエラー案内は、測定をやり直す時点で消す
+        UI.clearMeasureAlert();
+
         // マイクの初期化
         if (!micInitialized) {
             UI.updateMeasureStatus('idle');
-            const success = await Measurement.initMicrophone();
-            if (!success) {
-                UI.showToast('マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。', 'error');
+            const mic = await Measurement.initMicrophone();
+            if (!mic.ok) {
+                UI.showMicError(mic);
                 return;
             }
             micInitialized = true;
@@ -148,7 +176,10 @@ const App = (() => {
             }
         } catch (err) {
             console.error('測定エラー:', err);
-            UI.showToast(err.message || '測定に失敗しました', 'error');
+            UI.showMeasureAlert({
+                title: '測定に失敗しました',
+                body: err.message || '測定に失敗しました。もう一度お試しください。'
+            });
             return;
         }
 
@@ -167,7 +198,10 @@ const App = (() => {
                 UI.switchTab('results');
             }, 1000);
         } else {
-            UI.showToast('測定に失敗しました。もう一度お試しください。', 'error');
+            UI.showMeasureAlert({
+                title: '測定に失敗しました',
+                body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
+            });
         }
     }
 
@@ -204,6 +238,7 @@ const App = (() => {
      */
     function updateTspEstimate() {
         const el = document.getElementById('tspEstimate');
+        const guideEl = document.getElementById('guideTspTime');
         if (!el) return;
 
         const opts = getTspOptions();
@@ -214,6 +249,7 @@ const App = (() => {
         const total = signalSec * (opts.averages + 2); // 再生は 同期加算回数+2 周期
 
         el.textContent = `約${total.toFixed(1)}秒 (信号長 ${signalSec.toFixed(2)}秒)`;
+        if (guideEl) guideEl.textContent = `約${total.toFixed(1)}秒`;
     }
 
     /**

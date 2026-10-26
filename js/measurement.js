@@ -28,6 +28,8 @@ const Measurement = (() => {
 
     /**
      * マイクを初期化
+     * @returns {Promise<{ok: boolean, reason?: string, errorName?: string}>}
+     *   失敗時の reason は 'insecure' | 'denied' | 'not-found' | 'other'
      */
     async function initMicrophone() {
         try {
@@ -58,10 +60,29 @@ const Measurement = (() => {
             sourceNode.connect(analyserNode);
 
             console.log('マイク初期化成功: sampleRate =', audioCtx.sampleRate, ', state =', audioCtx.state);
-            return true;
+            return { ok: true };
         } catch (err) {
             console.error('マイクの初期化に失敗:', err);
-            return false;
+            return { ok: false, reason: classifyMicError(err), errorName: err && err.name };
+        }
+    }
+
+    /**
+     * マイク初期化の失敗を、利用者に案内する原因の区分に分ける
+     */
+    function classifyMicError(err) {
+        // 非セキュアコンテキストでは navigator.mediaDevices 自体が無く TypeError になるため先に判定する
+        if (!window.isSecureContext) return 'insecure';
+        switch (err && err.name) {
+            case 'NotAllowedError':
+            case 'PermissionDeniedError':
+            case 'SecurityError':
+                return 'denied';
+            case 'NotFoundError':
+            case 'DevicesNotFoundError':
+                return 'not-found';
+            default:
+                return 'other';
         }
     }
 
@@ -136,8 +157,8 @@ const Measurement = (() => {
      */
     async function startImpulseMeasurement() {
         if (!audioCtx || !sourceNode) {
-            const success = await initMicrophone();
-            if (!success) return null;
+            const mic = await initMicrophone();
+            if (!mic.ok) return null;
         }
 
         // AudioContextが suspended の場合は resume
@@ -272,8 +293,8 @@ const Measurement = (() => {
      */
     async function startPinkTspMeasurement(options = {}) {
         if (!audioCtx || !sourceNode) {
-            const success = await initMicrophone();
-            if (!success) throw new Error('マイクを初期化できませんでした');
+            const mic = await initMicrophone();
+            if (!mic.ok) throw new Error('マイクを初期化できませんでした');
         }
 
         // AudioContextが suspended の場合は resume
