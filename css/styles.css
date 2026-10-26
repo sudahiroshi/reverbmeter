@@ -427,6 +427,69 @@ body {
   min-height: 20px;
 }
 
+/* --- 測定エラーの案内 --- */
+.measure-alert {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-light);
+}
+
+.measure-alert [hidden],
+.measure-alert[hidden] {
+  display: none;
+}
+
+.measure-alert-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.measure-alert-title {
+  font-size: 0.9rem;
+  color: var(--danger);
+}
+
+.measure-alert-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.measure-alert-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.measure-alert-body {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  margin-top: 4px;
+}
+
+.measure-alert-detail {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}
+
+.measure-alert-action {
+  margin-top: 10px;
+  white-space: normal;
+}
+
 /* --- Waveform Canvas --- */
 .waveform-container {
   margin-top: 16px;
@@ -822,11 +885,12 @@ body {
 .toast-container {
   position: fixed;
   bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 16px;
+  right: 16px;
   z-index: 300;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
   pointer-events: none;
 }
@@ -845,7 +909,8 @@ body {
   gap: 8px;
   animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
   pointer-events: auto;
-  white-space: nowrap;
+  max-width: 500px;
+  overflow-wrap: anywhere;
 }
 
 .toast.success {

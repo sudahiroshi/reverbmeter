@@ -141,6 +141,17 @@
           </div>
         </div>
 
+        <!-- 測定エラーの案内 (閉じるか次の測定まで表示し続ける) -->
+        <div id="measureAlert" class="measure-alert" role="alert" hidden>
+          <div class="measure-alert-header">
+            <strong class="measure-alert-title"></strong>
+            <button type="button" class="measure-alert-close" aria-label="閉じる">×</button>
+          </div>
+          <p class="measure-alert-body"></p>
+          <p class="measure-alert-detail" hidden></p>
+          <button type="button" class="btn btn-outline btn-sm measure-alert-action" hidden></button>
+        </div>
+
         <!-- 波形表示 -->
         <div class="waveform-container">
           <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
@@ -302,6 +313,20 @@
           ピンクTSPはパワーが 1/f（オクターブあたり一定エネルギー、-3dB/oct）になるよう
           設計された測定信号です。白色TSPのように高域へエネルギーが偏らないため、
           室内測定で不足しがちな低域のS/Nを確保でき、スピーカーの過大入力も避けられます。
+        </p>
+
+        <h3 id="helpMicPermission">🎙️ マイクを許可する方法</h3>
+        <p>
+          許可を求める表示が出ない場合や「許可しない」を選んだ場合は、次の場所でマイクを許可に変更し、
+          ページを再読み込みしてください。
+        </p>
+        <ul>
+          <li><strong>iPhone Safari</strong>: 「設定」→「Safari」→「マイク」で許可を確認</li>
+          <li><strong>Android Chrome</strong>: アドレスバー左の 🔒 アイコン →「サイトの設定」→「マイク」を許可</li>
+          <li><strong>PC Chrome</strong>: アドレスバー左の 🔒 アイコン →「マイク」を許可に変更</li>
+        </ul>
+        <p>
+          マイクは https:// で始まるページでのみ使えます（PCで動作を試す場合は http://localhost も可）。
         </p>
 
         <h3>💡 より正確な結果を得るコツ</h3>

@@ -67,6 +67,9 @@ const App = (() => {
         // 測定ボタン
         document.getElementById('measureBtn')?.addEventListener('click', startMeasurement);
 
+        // 測定エラーの案内を閉じる
+        document.querySelector('#measureAlert .measure-alert-close')?.addEventListener('click', UI.clearMeasureAlert);
+
         // ピンクTSP設定の変更で測定時間の目安を更新
         ['tspDuration', 'tspStartFreq', 'tspEndFreq', 'tspAverages'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', updateTspEstimate);
@@ -121,12 +124,15 @@ const App = (() => {
             return;
         }
 
+        // 前回のエラー案内は、測定をやり直す時点で消す
+        UI.clearMeasureAlert();
+
         // マイクの初期化
         if (!micInitialized) {
             UI.updateMeasureStatus('idle');
-            const success = await Measurement.initMicrophone();
-            if (!success) {
-                UI.showToast('マイクへのアクセスが拒否されました。ブラウザの設定を確認してください。', 'error');
+            const mic = await Measurement.initMicrophone();
+            if (!mic.ok) {
+                UI.showMicError(mic);
                 return;
             }
             micInitialized = true;
@@ -148,7 +154,10 @@ const App = (() => {
             }
         } catch (err) {
             console.error('測定エラー:', err);
-            UI.showToast(err.message || '測定に失敗しました', 'error');
+            UI.showMeasureAlert({
+                title: '測定に失敗しました',
+                body: err.message || '測定に失敗しました。もう一度お試しください。'
+            });
             return;
         }
 
@@ -167,7 +176,10 @@ const App = (() => {
                 UI.switchTab('results');
             }, 1000);
         } else {
-            UI.showToast('測定に失敗しました。もう一度お試しください。', 'error');
+            UI.showMeasureAlert({
+                title: '測定に失敗しました',
+                body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
+            });
         }
     }
 

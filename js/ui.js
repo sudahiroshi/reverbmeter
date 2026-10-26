@@ -115,6 +115,88 @@ const UI = (() => {
     }
 
     /**
+     * マイク初期化失敗の原因別の案内 (Measurement.initMicrophone の reason に対応)
+     */
+    const MIC_ERROR_GUIDES = {
+        'insecure': {
+            title: '安全な接続（HTTPS）で開かれていません',
+            body: 'ブラウザは https:// で始まるページでしかマイクを使えません。https:// のURLで開き直してください（PCで動作を試す場合は http://localhost でも使えます）。'
+        },
+        'denied': {
+            title: 'マイクの使用が許可されていません',
+            body: 'ブラウザのサイト設定でこのページのマイクを「許可」に変更し、ページを再読み込みしてから、もう一度「開始」を押してください。',
+            showPermissionHelp: true
+        },
+        'not-found': {
+            title: 'マイクが見つかりません',
+            body: 'マイクが接続されているか、OSのサウンド設定で入力デバイスが有効になっているかを確認し、もう一度「開始」を押してください。'
+        },
+        'other': {
+            title: 'マイクを開始できませんでした',
+            body: '通話・録音アプリなど、ほかのアプリがマイクを使っていないか確認してください。ページを再読み込みしてから、もう一度「開始」を押してください。',
+            showPermissionHelp: true
+        }
+    };
+
+    /**
+     * マイク初期化の失敗を原因別に案内する
+     * @param {{reason: string, errorName?: string}} mic - Measurement.initMicrophone の戻り値
+     */
+    function showMicError(mic) {
+        const guide = MIC_ERROR_GUIDES[mic.reason] || MIC_ERROR_GUIDES['other'];
+        showMeasureAlert({
+            title: guide.title,
+            body: guide.body,
+            detail: mic.errorName ? `エラー: ${mic.errorName}` : '',
+            action: guide.showPermissionHelp
+                ? { label: '端末別のマイク許可手順を見る', onClick: () => openHelp('helpMicPermission') }
+                : null
+        });
+    }
+
+    /**
+     * 測定カード内にエラー案内を表示する (トーストと違い、閉じるか次の測定まで残る)
+     * @param {{title: string, body: string, detail?: string, action?: {label: string, onClick: Function}}} alert
+     */
+    function showMeasureAlert({ title, body, detail = '', action = null }) {
+        const el = document.getElementById('measureAlert');
+        if (!el) return;
+
+        el.querySelector('.measure-alert-title').textContent = title;
+        el.querySelector('.measure-alert-body').textContent = body;
+
+        const detailEl = el.querySelector('.measure-alert-detail');
+        detailEl.textContent = detail;
+        detailEl.hidden = !detail;
+
+        const actionBtn = el.querySelector('.measure-alert-action');
+        actionBtn.hidden = !action;
+        actionBtn.onclick = action ? action.onClick : null;
+        if (action) actionBtn.textContent = action.label;
+
+        el.hidden = false;
+        el.scrollIntoView({ block: 'nearest' });
+    }
+
+    /**
+     * 測定カード内のエラー案内を消す
+     */
+    function clearMeasureAlert() {
+        const el = document.getElementById('measureAlert');
+        if (el) el.hidden = true;
+    }
+
+    /**
+     * ヘルプを開き、指定した見出しまでスクロールする
+     */
+    function openHelp(anchorId) {
+        showModal('helpModal');
+        if (anchorId) {
+            document.getElementById(anchorId)?.scrollIntoView({ block: 'start' });
+        }
+    }
+
+    /**
      * 確認ダイアログ
      */
     function confirm(message) {
@@ -329,6 +411,10 @@ const UI = (() => {
         showModal,
         closeModal,
         showToast,
+        showMicError,
+        showMeasureAlert,
+        clearMeasureAlert,
+        openHelp,
         confirm,
         updateMeasureStatus,
         displayResults,
