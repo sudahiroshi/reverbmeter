@@ -226,6 +226,18 @@
               <div class="rt60-value" id="validValue" style="font-size:1rem;">--</div>
             </div>
           </div>
+          <p class="guide-note">
+            有効性: 減衰曲線の直線近似の適合度 R² が 80% を超え、RT60 が算出できたときに「✓ 有効」になります。
+          </p>
+
+          <!-- 「△ 不確実」やクリッピングのときの理由と改善方法 -->
+          <div id="validityAdvice" class="result-advice" hidden>
+            <div class="result-advice-title"></div>
+            <ul class="result-advice-reasons"></ul>
+            <div class="result-advice-subtitle">改善するには</div>
+            <ul class="result-advice-tips"></ul>
+            <button type="button" id="remeasureBtn" class="btn btn-outline btn-sm">🎤 測定タブで再測定する</button>
+          </div>
         </div>
 
         <!-- インパルス応答グラフ -->

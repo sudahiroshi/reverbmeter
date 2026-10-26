@@ -83,6 +83,14 @@ const App = (() => {
         });
         updateTspEstimate();
 
+        // 再測定ボタン: 測定タブへ戻り、測定前チェックリストを開いて見直せるようにする
+        document.getElementById('remeasureBtn')?.addEventListener('click', () => {
+            const preCheck = document.getElementById('preCheck');
+            if (preCheck) preCheck.open = true;
+            UI.switchTab('measure');
+            window.scrollTo(0, 0);
+        });
+
         // 保存ボタン
         document.getElementById('saveBtn')?.addEventListener('click', saveResult);
 

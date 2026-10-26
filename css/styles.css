@@ -643,6 +643,45 @@ body {
   margin-left: 2px;
 }
 
+/* 「△ 不確実」のときの理由と改善方法 */
+.result-advice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-light);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.result-advice[hidden] {
+  display: none;
+}
+
+.result-advice-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.result-advice-subtitle {
+  font-weight: 700;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.result-advice ul {
+  padding-left: 20px;
+}
+
+.result-advice li {
+  margin-bottom: 4px;
+}
+
+.result-advice .btn {
+  margin-top: 8px;
+}
+
 .chart-container {
   position: relative;
   width: 100%;

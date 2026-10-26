@@ -297,6 +297,8 @@ const UI = (() => {
                 : `<span style="color:var(--warning)">△ 不確実</span>`;
         }
 
+        displayValidityAdvice(result);
+
         // インパルス応答グラフ (保存済みデータには含まれないため存在する場合のみ)
         const irCard = document.getElementById('irChart')?.closest('.card');
         if (result.plots && result.plots.irWave && result.plots.irWave.times.length > 0) {
@@ -323,6 +325,65 @@ const UI = (() => {
         const resultContent = document.getElementById('resultContent');
         if (placeholder) placeholder.style.display = 'none';
         if (resultContent) resultContent.style.display = 'block';
+    }
+
+    /**
+     * 「△ 不確実」またはクリッピングのとき、理由と改善方法を表示する
+     */
+    function displayValidityAdvice(result) {
+        const el = document.getElementById('validityAdvice');
+        if (!el) return;
+
+        const overall = result.overall;
+        const ir = result.ir;
+        const clipped = !!(ir && ir.clipped);
+        if (overall.valid && !clipped) {
+            el.hidden = true;
+            return;
+        }
+
+        // 理由は有効判定 (AudioUtils.calculateRT60) と同じ条件で挙げる
+        const r2 = overall.r2 || 0;
+        const reasons = [];
+        if (!Number.isFinite(overall.rt60) || overall.rt60 <= 0) {
+            reasons.push('減衰が十分に録音できず、RT60 を算出できませんでした。');
+        }
+        if (r2 <= 0.8) {
+            reasons.push(`適合度 R² が ${(r2 * 100).toFixed(1)}% で、有効の基準（80% を超えること）に届いていません。` +
+                '減衰曲線がまっすぐ下がっておらず、騒音や音の小ささの影響が考えられます。');
+        }
+        if (clipped) {
+            reasons.push(`入力がクリッピングしています（${(ir.clippingRatio * 100).toFixed(1)}%）。音が大きすぎて波形がひずんでいます。`);
+        }
+
+        const tips = ['窓とドアを閉め、エアコンや換気扇を止めて、静かな状態で測定する'];
+        if (result.method === 'impulse') {
+            tips.push('手拍子はマイクから1〜2m離れて、1回だけはっきり鳴らす（小さすぎると減衰を捉えられません）');
+        } else if (result.method === 'pink-tsp') {
+            tips.push(clipped
+                ? '端末の音量を下げる'
+                : '端末の音量を上げる。改善しない場合は、同期加算回数を増やすか信号長を長くする');
+            tips.push('スピーカーとマイクを手や物でふさがない');
+        }
+        tips.push('同じ場所で2〜3回測定し、値がそろうか確かめる');
+
+        el.querySelector('.result-advice-title').textContent = overall.valid
+            ? '⚠️ 注意が必要な結果です'
+            : '△ この結果は不確実です';
+        fillList(el.querySelector('.result-advice-reasons'), reasons);
+        fillList(el.querySelector('.result-advice-tips'), tips);
+        el.hidden = false;
+    }
+
+    /**
+     * 文字列の配列を <li> として ul に入れる
+     */
+    function fillList(ul, items) {
+        ul.replaceChildren(...items.map(text => {
+            const li = document.createElement('li');
+            li.textContent = text;
+            return li;
+        }));
     }
 
     /**
