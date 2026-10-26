@@ -170,6 +170,7 @@
         <div class="level-meter-container">
           <div class="level-value" id="levelValue">--</div>
           <div class="level-unit">dBFS</div>
+          <p id="levelHint" class="level-hint">「開始」を押してマイクを許可すると、入力レベルが表示されます</p>
           <div class="level-meter">
             <div class="level-meter-fill" id="levelFill"></div>
           </div>
@@ -249,8 +250,9 @@
         <div class="placeholder-icon">📊</div>
         <p>測定結果がまだありません</p>
         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
-          測定タブで計測を実行してください
+          測定タブで「開始」を押して測定すると、ここに結果が表示されます。保存した結果は「データ」タブから開けます。
         </p>
+        <button type="button" id="goMeasureBtn" class="btn btn-primary btn-sm empty-action">🎤 測定タブへ</button>
       </div>
 
       <!-- 結果コンテンツ -->
@@ -363,6 +365,7 @@
         <div id="dataEmpty" class="data-empty">
           <div class="empty-icon">📂</div>
           <p>保存されたデータはありません</p>
+          <p class="data-empty-hint">測定したあと、「結果」タブの「💾 測定結果を保存」で名前を付けて保存すると、ここに表示されます</p>
         </div>
       </div>
     </section>

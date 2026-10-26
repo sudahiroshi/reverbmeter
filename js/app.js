@@ -123,6 +123,9 @@ const App = (() => {
             window.scrollTo(0, 0);
         });
 
+        // 結果が無いときの「測定タブへ」
+        document.getElementById('goMeasureBtn')?.addEventListener('click', () => UI.switchTab('measure'));
+
         // 保存ボタン
         document.getElementById('saveBtn')?.addEventListener('click', saveResult);
 
@@ -193,6 +196,8 @@ const App = (() => {
             updateTspEstimate();
 
             // レベルメーター開始
+            const levelHint = document.getElementById('levelHint');
+            if (levelHint) levelHint.hidden = true;
             Measurement.startLevelMeter((db, rms) => {
                 updateLevelMeter(db, rms);
             });

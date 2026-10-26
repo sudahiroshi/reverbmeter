@@ -441,6 +441,18 @@ body {
   margin-bottom: 16px;
 }
 
+/* マイクを使い始める前 (値が「--」のとき) だけ表示する */
+.level-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: -4px 0 12px;
+}
+
+.level-hint[hidden] {
+  display: none;
+}
+
 /*
  * 適正範囲の目安。目盛りは -60〜0 dBFS で、位置 = (dBFS + 60) / 60
  * - -40 dBFS (33.333%) 未満は小さすぎ: インパルス方式が静寂とみなすレベル
@@ -1019,6 +1031,11 @@ body {
   font-size: 0.9rem;
 }
 
+.data-empty .data-empty-hint {
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
 /* --- Select All --- */
 .select-all-label {
   font-size: 0.85rem;
@@ -1269,6 +1286,10 @@ body {
 
 .no-results p {
   font-size: 0.95rem;
+}
+
+.no-results .empty-action {
+  margin-top: 16px;
 }
 
 /* --- Export Format Selector --- */
