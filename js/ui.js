@@ -6,6 +6,7 @@
 const UI = (() => {
     const THEME_KEY = 'reverberation_theme';
     let guideStep = 0; // ヘルプで表示中のステップ
+    let pendingConfirm = null; // 開いている確認ダイアログ { resolve, opener }
 
     /**
      * テーマを初期化
@@ -112,6 +113,11 @@ const UI = (() => {
      * モーダルを閉じる
      */
     function closeModal(modalId) {
+        // 確認ダイアログを × や背景クリックで閉じたときは、キャンセルとして結果を返す
+        if (modalId === 'confirmModal' && pendingConfirm) {
+            answerConfirm(false);
+            return;
+        }
         const modal = document.getElementById(modalId);
         if (modal) {
             modal.classList.remove('active');
@@ -272,10 +278,68 @@ const UI = (() => {
     }
 
     /**
-     * 確認ダイアログ
+     * 確認ダイアログを開く。押されたボタンに応じて true (実行) / false (キャンセル) で解決する
+     * Esc・×・背景クリックはキャンセル扱い。閉じると開く前の要素へフォーカスを戻す
+     * @param {{title: string, message: string, okLabel: string}} options
+     * @returns {Promise<boolean>}
      */
-    function confirm(message) {
-        return window.confirm(message);
+    function confirm({ title, message, okLabel }) {
+        // 前の確認が開いたままなら、キャンセルとして閉じてから開き直す
+        if (pendingConfirm) answerConfirm(false);
+
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        document.getElementById('confirmOk').textContent = okLabel;
+
+        return new Promise(resolve => {
+            pendingConfirm = { resolve, opener: document.activeElement };
+            showModal('confirmModal');
+            // 削除など取り消せない操作なので、Enter を押しただけでは実行されないようキャンセル側を既定にする
+            document.getElementById('confirmCancel').focus();
+        });
+    }
+
+    /**
+     * 確認ダイアログを閉じて結果を返す
+     */
+    function answerConfirm(ok) {
+        if (!pendingConfirm) return;
+        const { resolve, opener } = pendingConfirm;
+        pendingConfirm = null;
+        closeModal('confirmModal');
+        if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
+        resolve(ok);
+    }
+
+    /**
+     * 確認ダイアログを開いている間のキー操作 (Esc で閉じる、Tab はダイアログ内で循環させる)
+     */
+    function handleConfirmKeydown(e) {
+        if (!pendingConfirm) return;
+
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            answerConfirm(false);
+            return;
+        }
+        if (e.key !== 'Tab') return;
+
+        const modal = document.querySelector('#confirmModal .modal');
+        const focusable = Array.from(modal.querySelectorAll('button:not([disabled])'));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (!modal.contains(active)) {
+            e.preventDefault();
+            first.focus();
+        } else if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+        }
     }
 
     /**
@@ -305,6 +369,25 @@ const UI = (() => {
         if (measureBtn) {
             measureBtn.classList.remove('recording', 'processing');
             if (s.btnClass) measureBtn.classList.add(s.btnClass);
+        }
+
+        // 測定中 (待機・録音・再生・解析) は試聴できないようにする
+        const previewBtn = document.getElementById('tspPreviewBtn');
+        if (previewBtn) previewBtn.disabled = !!s.btnClass;
+    }
+
+    /**
+     * 測定音の試聴ボタンと状態表示を切り替える
+     * @param {{durationSec: number, repeats: number}|null} playing - 再生中の情報。null なら停止状態
+     */
+    function setPreviewPlaying(playing) {
+        const btn = document.getElementById('tspPreviewBtn');
+        const status = document.getElementById('tspPreviewStatus');
+        if (btn) btn.textContent = playing ? '■ 停止' : '▶ 測定音を試聴';
+        if (status) {
+            status.textContent = playing
+                ? `🔊 再生中…（約${playing.durationSec.toFixed(1)}秒。測定ではこの音を${playing.repeats}回続けて鳴らします）`
+                : '';
         }
     }
 
@@ -490,16 +573,22 @@ const UI = (() => {
 
         if (emptyEl) emptyEl.style.display = 'none';
 
-        listEl.innerHTML = data.map(item => {
+        // id は HTML に埋め込まず、要素のプロパティで設定する (id の文字によって属性や onclick の文字列が壊れないように)。
+        // 行の操作は data-action を手がかりに、app.js が #dataList でまとめて受け取る
+        listEl.replaceChildren(...data.map(item => {
+            const id = item.id || '';
+            const li = document.createElement('li');
+            li.className = 'data-item';
+            li.dataset.id = id;
+
             try {
                 const rt60 = item.result && item.result.overall && Number.isFinite(item.result.overall.rt60)
                     ? item.result.overall.rt60.toFixed(3) + 's'
                     : 'N/A';
 
-                return `
-            <li class="data-item" data-id="${item.id}">
-              <input type="checkbox" class="data-checkbox" value="${item.id}" aria-label="選択">
-              <div class="data-item-info" onclick="App.viewResult('${item.id}')">
+                li.innerHTML = `
+              <input type="checkbox" class="data-checkbox" aria-label="選択">
+              <div class="data-item-info" data-action="view">
                 <div class="data-item-name">${escapeHtml(item.name || '名前なし')}</div>
                 <div class="data-item-meta">
                   <span>${Storage.formatDate(item.date)}</span>
@@ -507,28 +596,28 @@ const UI = (() => {
                 </div>
               </div>
               <div class="data-item-actions">
-                <button class="btn-icon-sm" onclick="App.exportSingle('${item.id}', 'csv')" title="CSV出力">📄</button>
-                <button class="btn-icon-sm" onclick="App.exportSingle('${item.id}', 'json')" title="JSON出力">📋</button>
-                <button class="btn-icon-sm delete" onclick="App.deleteSingle('${item.id}')" title="削除">🗑️</button>
+                <button class="btn-icon-sm" data-action="export-csv" title="CSV出力">📄</button>
+                <button class="btn-icon-sm" data-action="export-json" title="JSON出力">📋</button>
+                <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
               </div>
-            </li>
-          `;
+            `;
             } catch (err) {
                 console.warn('データ項目の描画エラー:', item, err);
-                return `
-            <li class="data-item" data-id="${item.id || 'unknown'}">
-              <input type="checkbox" class="data-checkbox" value="${item.id || ''}" aria-label="選択">
+                li.innerHTML = `
+              <input type="checkbox" class="data-checkbox" aria-label="選択">
               <div class="data-item-info">
                 <div class="data-item-name">⚠️ 破損データ</div>
                 <div class="data-item-meta"><span>読み込めません</span></div>
               </div>
               <div class="data-item-actions">
-                <button class="btn-icon-sm delete" onclick="App.deleteSingle('${item.id || ''}')" title="削除">🗑️</button>
+                <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
               </div>
-            </li>
-          `;
+            `;
             }
-        }).join('');
+
+            li.querySelector('.data-checkbox').value = id;
+            return li;
+        }));
     }
 
     /**
@@ -557,7 +646,10 @@ const UI = (() => {
         nextGuideStep,
         prevGuideStep,
         confirm,
+        answerConfirm,
+        handleConfirmKeydown,
         updateMeasureStatus,
+        setPreviewPlaying,
         displayResults,
         updateDataList
     };

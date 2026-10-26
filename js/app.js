@@ -5,6 +5,8 @@
 
 const App = (() => {
     let currentResult = null;
+    let currentSavedId = null; // currentResult を保存した (または開いた) 保存データのID
+    let suggestedName = '';    // 保存欄に入れた測定名の既定値
     let micInitialized = false;
 
     /**
@@ -20,6 +22,8 @@ const App = (() => {
         // タブナビゲーション
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                // 試聴の停止ボタンは測定タブにしか無いため、タブを移るときは止める
+                Measurement.stopPreview();
                 UI.switchTab(btn.dataset.tab);
             });
         });
@@ -41,6 +45,11 @@ const App = (() => {
         document.getElementById('guidePrev')?.addEventListener('click', UI.prevGuideStep);
         document.getElementById('guideNext')?.addEventListener('click', UI.nextGuideStep);
 
+        // 本文中の「用語の説明」などのボタン: data-help の見出しを含むヘルプのステップを開く
+        document.querySelectorAll('[data-help]').forEach(btn => {
+            btn.addEventListener('click', () => UI.openHelp(btn.dataset.help));
+        });
+
         // モーダルを閉じる
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -56,11 +65,25 @@ const App = (() => {
             });
         });
 
+        // 確認ダイアログ
+        document.getElementById('confirmOk')?.addEventListener('click', () => UI.answerConfirm(true));
+        document.getElementById('confirmCancel')?.addEventListener('click', () => UI.answerConfirm(false));
+        document.addEventListener('keydown', UI.handleConfirmKeydown);
+
+        // 未保存の測定結果はメモリにしか無いため、再読み込みや閉じる前に確認する
+        // (この場面ではアプリ内のダイアログを出せず、ブラウザ標準の確認になる)
+        window.addEventListener('beforeunload', (e) => {
+            if (!hasUnsavedResult()) return;
+            e.preventDefault();
+            e.returnValue = '';
+        });
+
         // 測定モード切替
         document.querySelectorAll('.mode-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
+                Measurement.stopPreview();
                 Measurement.setMode(btn.dataset.mode);
                 UI.setMeasureMode(btn.dataset.mode);
 
@@ -90,6 +113,9 @@ const App = (() => {
         });
         updateTspEstimate();
 
+        // 測定音の試聴
+        document.getElementById('tspPreviewBtn')?.addEventListener('click', togglePreview);
+
         // 再測定ボタン: 測定タブへ戻り、測定前チェックリストを開いて見直せるようにする
         document.getElementById('remeasureBtn')?.addEventListener('click', () => {
             const preCheck = document.getElementById('preCheck');
@@ -97,6 +123,9 @@ const App = (() => {
             UI.switchTab('measure');
             window.scrollTo(0, 0);
         });
+
+        // 結果が無いときの「測定タブへ」
+        document.getElementById('goMeasureBtn')?.addEventListener('click', () => UI.switchTab('measure'));
 
         // 保存ボタン
         document.getElementById('saveBtn')?.addEventListener('click', saveResult);
@@ -106,6 +135,21 @@ const App = (() => {
             document.querySelectorAll('.data-checkbox').forEach(cb => {
                 cb.checked = e.target.checked;
             });
+        });
+
+        // 保存データ一覧の各行の操作 (行は再描画されるため、一覧でまとめて受け取る)
+        document.getElementById('dataList')?.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action]');
+            const row = target?.closest('.data-item');
+            if (!row) return;
+
+            const id = row.dataset.id;
+            switch (target.dataset.action) {
+                case 'view': viewResult(id); break;
+                case 'export-csv': exportSingle(id, 'csv'); break;
+                case 'export-json': exportSingle(id, 'json'); break;
+                case 'delete': deleteSingle(id); break;
+            }
         });
 
         // 選択削除ボタン
@@ -146,6 +190,12 @@ const App = (() => {
             return;
         }
 
+        if (hasUnsavedResult() && !await UI.confirm({
+            title: '保存していない測定結果があります',
+            message: '新しい測定が終わると、いまの測定結果は置き換わり、元に戻せません。残したい場合は「キャンセル」を押し、結果タブで保存してください。',
+            okLabel: '保存せずに測定する'
+        })) return;
+
         // 前回のエラー案内は、測定をやり直す時点で消す
         UI.clearMeasureAlert();
 
@@ -158,12 +208,20 @@ const App = (() => {
                 return;
             }
             micInitialized = true;
+            // 実際のサンプリング周波数が要求値と違う場合に備えて、目安を測り直す
+            updateTspEstimate();
 
             // レベルメーター開始
+            const levelHint = document.getElementById('levelHint');
+            if (levelHint) levelHint.hidden = true;
             Measurement.startLevelMeter((db, rms) => {
                 updateLevelMeter(db, rms);
             });
         }
+
+        // 試聴の音が録音に混ざらないよう、測定を始める直前に止める
+        // (マイク許可の表示中に試聴が始められるため、マイク初期化の後で止める)
+        Measurement.stopPreview();
 
         const mode = Measurement.getMode();
         let result = null;
@@ -185,7 +243,9 @@ const App = (() => {
 
         if (result) {
             currentResult = result;
+            currentSavedId = null;
             UI.displayResults(result);
+            suggestSaveName(result);
 
             if (result.ir && result.ir.clipped) {
                 UI.showToast('入力がクリッピングしています。音量を下げて再測定してください', 'error');
@@ -202,6 +262,23 @@ const App = (() => {
                 title: '測定に失敗しました',
                 body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
             });
+        }
+    }
+
+    /**
+     * 測定音の試聴を開始・停止する
+     */
+    function togglePreview() {
+        if (Measurement.getIsPreviewing()) {
+            Measurement.stopPreview();
+            return;
+        }
+        try {
+            const playing = Measurement.startPreview(getTspOptions(), () => UI.setPreviewPlaying(null));
+            if (playing) UI.setPreviewPlaying(playing);
+        } catch (err) {
+            console.error('試聴エラー:', err);
+            UI.showToast('測定音を再生できませんでした', 'error');
         }
     }
 
@@ -234,7 +311,7 @@ const App = (() => {
     /**
      * ピンクTSPの測定時間の目安を表示する
      * 実際の信号長はAudioContextのサンプリングレートで決まるので、
-     * マイク未初期化のうちは48kHz想定で概算する
+     * マイク未初期化のうちは測定・試聴と同じ要求値 (Measurement.getSampleRate) で概算する
      */
     function updateTspEstimate() {
         const el = document.getElementById('tspEstimate');
@@ -242,11 +319,12 @@ const App = (() => {
         if (!el) return;
 
         const opts = getTspOptions();
-        const sampleRate = Measurement.getAudioContext()?.sampleRate || 48000;
+        const sampleRate = Measurement.getSampleRate();
 
         // 信号長は2の冪サンプルに丸められるため、丸めた後の長さで見積もる
         const signalSec = Math.pow(2, Math.round(Math.log2(sampleRate * opts.durationSec))) / sampleRate;
-        const total = signalSec * (opts.averages + 2); // 再生は 同期加算回数+2 周期
+        // 再生は (同期加算回数 + 2) 周期を予約するが、録音が (同期加算回数 + 1) 周期そろうと止まる
+        const total = signalSec * (opts.averages + 1);
 
         el.textContent = `約${total.toFixed(1)}秒 (信号長 ${signalSec.toFixed(2)}秒)`;
         if (guideEl) guideEl.textContent = `約${total.toFixed(1)}秒`;
@@ -265,10 +343,27 @@ const App = (() => {
         }
 
         if (levelFill) {
-            // -60dB〜0dBを0%〜100%にマップ
+            // -60dB〜0dBを0%〜100%にマップ (帯の色と位置をそろえるため、幅ではなく右側を隠して表す)
             const percent = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
-            levelFill.style.width = percent + '%';
+            levelFill.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
         }
+    }
+
+    /**
+     * 保存欄に測定名の既定値 (測定方式 + 測定日時) を入れる
+     * 一覧では日時が別に出て、狭い画面では名前が末尾から省略されるため、方式を先に置く
+     * 利用者が書き換えた名前は残し、空か前回の既定値のままのときだけ入れ替える
+     */
+    function suggestSaveName(result) {
+        const nameInput = document.getElementById('saveName');
+        if (!nameInput) return;
+
+        const current = nameInput.value.trim();
+        if (current && current !== suggestedName) return;
+
+        const method = result.method === 'pink-tsp' ? 'ピンクTSP' : 'インパルス';
+        suggestedName = `${method} ${Storage.formatDate(result.timestamp)}`;
+        nameInput.value = suggestedName;
     }
 
     /**
@@ -290,7 +385,7 @@ const App = (() => {
         }
 
         try {
-            Storage.save(name, currentResult);
+            currentSavedId = Storage.save(name, currentResult);
             UI.showToast(`「${name}」を保存しました`, 'success');
             if (nameInput) nameInput.value = '';
             UI.updateDataList();
@@ -302,13 +397,24 @@ const App = (() => {
     /**
      * 保存済みの結果を表示
      */
-    function viewResult(id) {
+    async function viewResult(id) {
         const entry = Storage.getById(id);
         if (!entry) return;
 
+        if (hasUnsavedResult() && !await UI.confirm({
+            title: '保存していない測定結果があります',
+            message: '保存データを開くと、いまの測定結果は置き換わり、元に戻せません。残したい場合は「キャンセル」を押し、結果タブで保存してください。',
+            okLabel: '保存せずに開く'
+        })) return;
+
         currentResult = entry.result;
+        currentSavedId = id;
         currentResult.overall = entry.result.overall;
         currentResult.bands = entry.result.bands;
+
+        // 前の測定結果に入れた既定の名前は、開いた保存データとは別の結果を指すので消す
+        const nameInput = document.getElementById('saveName');
+        if (nameInput && nameInput.value === suggestedName) nameInput.value = '';
 
         UI.displayResults(currentResult);
         UI.switchTab('results');
@@ -317,25 +423,40 @@ const App = (() => {
     /**
      * 1件削除
      */
-    function deleteSingle(id) {
-        if (!UI.confirm('この測定データを削除しますか？')) return;
+    async function deleteSingle(id) {
+        if (!await UI.confirm({
+            title: 'この測定データを削除しますか？',
+            message: '削除したデータは元に戻せません。',
+            okLabel: '削除する'
+        })) return;
 
+        const index = Storage.getAll().findIndex(item => item.id === id);
         Storage.deleteById(id);
         UI.updateDataList();
+
+        // 押した削除ボタンは再描画で消えるため、同じ位置の行 (無ければ「すべて選択」) へフォーカスを移す
+        const deleteButtons = document.querySelectorAll('#dataList .btn-icon-sm.delete');
+        const next = deleteButtons[Math.min(index, deleteButtons.length - 1)] || document.getElementById('selectAll');
+        next?.focus();
+
         UI.showToast('削除しました', 'success');
     }
 
     /**
      * 選択した項目を削除
      */
-    function deleteSelected() {
+    async function deleteSelected() {
         const checked = document.querySelectorAll('.data-checkbox:checked');
         if (checked.length === 0) {
             UI.showToast('削除する項目を選択してください', 'error');
             return;
         }
 
-        if (!UI.confirm(`${checked.length}件のデータを削除しますか？`)) return;
+        if (!await UI.confirm({
+            title: `${checked.length}件のデータを削除しますか？`,
+            message: '削除したデータは元に戻せません。',
+            okLabel: '削除する'
+        })) return;
 
         const ids = Array.from(checked).map(cb => cb.value);
         Storage.deleteByIds(ids);
@@ -369,6 +490,14 @@ const App = (() => {
         const ids = Array.from(checked).map(cb => cb.value);
         Storage.exportMultiple(ids, format);
         UI.showToast(`${ids.length}件を${format.toUpperCase()}でエクスポートしました`, 'success');
+    }
+
+    /**
+     * 表示中の測定結果が保存されていないか
+     * 保存後にその保存データを削除した場合も、結果はメモリにしか残らないので未保存とみなす
+     */
+    function hasUnsavedResult() {
+        return !!currentResult && !(currentSavedId && Storage.getById(currentSavedId));
     }
 
     /**

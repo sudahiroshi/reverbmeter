@@ -352,10 +352,50 @@ body {
   margin-bottom: 4px;
 }
 
+/* 手順の直下に置くため、手順の下余白を詰めて手順とひとまとまりに見せる */
+.guide-steps + .guide-privacy {
+  margin: -12px 0 20px;
+}
+
 .guide-note {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-top: 8px;
+}
+
+/* 本文中からヘルプの該当箇所を開くボタン (見た目はリンク) */
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--accent-hover);
+}
+
+/* 用語の説明 */
+.glossary dt {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 12px;
+}
+
+.glossary dt:first-child {
+  margin-top: 0;
+}
+
+.glossary dd {
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin-top: 2px;
 }
 
 /* --- Measurement Mode Selector --- */
@@ -401,21 +441,109 @@ body {
   margin-bottom: 16px;
 }
 
+/* マイクを使い始める前 (値が「--」のとき) だけ表示する */
+.level-hint {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: -4px 0 12px;
+}
+
+.level-hint[hidden] {
+  display: none;
+}
+
+/*
+ * 適正範囲の目安。目盛りは -60〜0 dBFS で、位置 = (dBFS + 60) / 60
+ * - -40 dBFS (33.333%) 未満は小さすぎ: インパルス方式が静寂とみなすレベル
+ *   (measurement.js の SILENCE_THRESHOLD 0.005 ≈ -46 dBFS) に近く、背景音と区別しにくい
+ * - -10 dBFS (83.333%) 超は大きすぎ: メーターは 2048 サンプル窓の RMS で、ピンクTSP の窓内の
+ *   ピーク/RMS 比は最大で約 8.5 dB。-10 dBFS 以下ならピークがクリッピング判定
+ *   (pink-tsp.js の CLIP_LEVEL 0.99 ≈ -0.1 dBFS) に届かない
+ */
 .level-meter {
+  --level-low: 33.333%;
+  --level-high: 83.333%;
   width: 100%;
   height: 24px;
-  background: var(--bg-tertiary);
+  background:
+    linear-gradient(90deg,
+      var(--warning-light) 0 var(--level-low),
+      var(--success-light) var(--level-low) var(--level-high),
+      var(--danger-light) var(--level-high)),
+    var(--bg-tertiary);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
 }
 
+/* 帯の境界線 */
+.level-meter::before,
+.level-meter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-muted);
+  opacity: 0.6;
+  z-index: 1;
+}
+
+.level-meter::before {
+  left: var(--level-low);
+}
+
+.level-meter::after {
+  left: var(--level-high);
+}
+
+/* 帯と同じ位置で色が変わるよう全幅で塗り、レベルより右を clip-path で隠す (JS が更新する) */
 .level-meter-fill {
-  height: 100%;
-  width: 0%;
+  position: absolute;
+  inset: 0;
   border-radius: 12px;
-  transition: width 0.05s linear;
-  background: linear-gradient(90deg, var(--success), var(--warning), var(--danger));
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.05s linear;
+  background: linear-gradient(90deg,
+    var(--warning) 0 var(--level-low),
+    var(--success) var(--level-low) var(--level-high),
+    var(--danger) var(--level-high));
+}
+
+.level-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.level-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.level-swatch.low {
+  background: var(--warning);
+}
+
+.level-swatch.ok {
+  background: var(--success);
+}
+
+.level-swatch.high {
+  background: var(--danger);
 }
 
 .level-meter-labels {
@@ -903,6 +1031,11 @@ body {
   font-size: 0.9rem;
 }
 
+.data-empty .data-empty-hint {
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
 /* --- Select All --- */
 .select-all-label {
   font-size: 0.85rem;
@@ -1020,6 +1153,15 @@ body {
 #helpModal .modal-body {
   overflow-y: auto;
   min-height: 0;
+}
+
+/* 確認ダイアログ */
+.confirm-modal {
+  max-width: 400px;
+}
+
+.confirm-modal .modal-body p {
+  margin-bottom: 0;
 }
 
 .guide-step[hidden] {
@@ -1146,6 +1288,10 @@ body {
   font-size: 0.95rem;
 }
 
+.no-results .empty-action {
+  margin-top: 16px;
+}
+
 /* --- Export Format Selector --- */
 .export-options {
   display: flex;
@@ -1178,6 +1324,16 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-light);
+}
+
+/* --- 対応環境の表示 --- */
+.app-footer {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* --- Responsive --- */
@@ -1250,6 +1406,40 @@ body {
   font-weight: 600;
   color: var(--text-primary);
   font-family: var(--font-mono);
+}
+
+/* ピンクTSP 設定の補助説明 */
+.setting-help {
+  margin-top: 4px;
+  font-size: 0.85rem;
+}
+
+.setting-help summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.setting-help .glossary {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+}
+
+/* 測定音の試聴 */
+.tsp-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.tsp-preview-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 /* --- IR測定条件 --- */

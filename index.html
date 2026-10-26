@@ -123,6 +123,40 @@
             <span class="setting-label">測定時間の目安</span>
             <span class="setting-value" id="tspEstimate">--</span>
           </div>
+          <details class="setting-help">
+            <summary>ℹ️ 各設定の意味</summary>
+            <dl class="glossary">
+              <dt>信号長</dt>
+              <dd>
+                1 回に鳴らす測定音の長さです。長くするほど測定音のエネルギーが増えて S/N が上がりますが、測定時間が長くなります。
+                求められるインパルス応答の長さもこの長さまでなので、残響の長い部屋では長くしてください。
+                実際の長さは計算に適した長さに丸められ、「測定時間の目安」のかっこ内に表示されます。
+              </dd>
+              <dt>開始周波数・終了周波数</dt>
+              <dd>
+                測定音に含める周波数の範囲です。既定（40〜16000Hz）は、周波数帯別 RT60 の 6 帯域（125Hz〜4kHz）を含んでいます。
+                範囲を狭めると、範囲外の帯域は測定音にほとんど含まれず、その帯域の結果が不確実になります。
+                端末のスピーカーが出せない低音を範囲に含めても、その帯域は測れません。
+              </dd>
+              <dt>同期加算回数</dt>
+              <dd>
+                録音した測定音を何周期分足し合わせて平均するかです。回数を 2 倍にするごとに、ランダムな背景騒音の影響が約 3dB 小さくなります。
+                そのぶん測定音をくり返し鳴らすため、測定時間が長くなります。
+              </dd>
+              <dt>測定時間の目安</dt>
+              <dd>
+                測定音が鳴る時間です。測定音を「同期加算回数 + 1」回続けて鳴らします（最初の 1 回は部屋の響きが安定するまでの分で、平均には使いません）。
+              </dd>
+            </dl>
+          </details>
+          <!-- 測定音の試聴 (マイクは使わず、いまの設定の測定音を1周期だけ鳴らす) -->
+          <div class="tsp-preview">
+            <button type="button" id="tspPreviewBtn" class="btn btn-outline btn-sm">▶ 測定音を試聴</button>
+            <span id="tspPreviewStatus" class="tsp-preview-status" role="status"></span>
+          </div>
+          <p class="guide-note">
+            🔈 試聴は測定と同じ大きさで鳴ります。はじめは端末の音量を小さめにして試聴し、少しずつ上げてください。
+          </p>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
             ⚠️ ピンクTSPがスピーカーから再生されます。音量にご注意ください。<br>
             ピンク特性はオクターブあたりのエネルギーが一定になるため、低域のS/Nを確保しやすくなります。
@@ -130,12 +164,13 @@
         </div>
       </div>
 
-      <!-- 音圧レベルメーター -->
+      <!-- 入力レベルメーター (dBFS。騒音計の音圧レベルではないため「入力レベル」と呼ぶ) -->
       <div class="card">
-        <div class="card-title">📶 音圧レベル</div>
+        <div class="card-title">📶 入力レベル</div>
         <div class="level-meter-container">
           <div class="level-value" id="levelValue">--</div>
           <div class="level-unit">dBFS</div>
+          <p id="levelHint" class="level-hint">「開始」を押してマイクを許可すると、入力レベルが表示されます</p>
           <div class="level-meter">
             <div class="level-meter-fill" id="levelFill"></div>
           </div>
@@ -145,6 +180,19 @@
             <span>-20 dB</span>
             <span>0 dB</span>
           </div>
+          <!-- 適正範囲の目安 (境界の根拠は styles.css の .level-meter を参照) -->
+          <ul class="level-legend">
+            <li><span class="level-swatch low"></span>小さすぎ（-40 dB 未満）</li>
+            <li><span class="level-swatch ok"></span>適正（-40〜-10 dB）</li>
+            <li><span class="level-swatch high"></span>大きすぎ・クリッピングの恐れ（-10 dB 超）</li>
+          </ul>
+          <p class="guide-note">
+            測定音や手拍子が鳴っている間の目安です。何も鳴らしていないときは、低いほど静かで測定に向いています。
+          </p>
+          <p class="guide-note">
+            ※ dBFS はデジタル上の値（最大＝0dB）で、騒音計で測る dB（音圧レベル）とは異なります。
+            <button type="button" class="link-btn" data-help="termDbfs">dBFS とは</button>
+          </p>
         </div>
       </div>
 
@@ -159,6 +207,10 @@
           <li data-only="tsp">スピーカーから測定音が<span id="guideTspTime">数秒</span>鳴ります。鳴り終わるまで動かず静かにする</li>
           <li>解析が終わると「結果」タブに切り替わります</li>
         </ol>
+        <p class="guide-note guide-privacy">
+          🔒 録音した音声は端末の中で解析するだけで、送信も保存もしません（保存されるのは解析結果だけです）。
+          <button type="button" class="link-btn" data-help="helpPrivacy">詳しく</button>
+        </p>
 
         <div class="measure-btn-container">
           <button id="measureBtn" class="measure-btn" aria-label="測定開始">
@@ -198,8 +250,9 @@
         <div class="placeholder-icon">📊</div>
         <p>測定結果がまだありません</p>
         <p style="font-size:0.8rem; color:var(--text-muted); margin-top:8px;">
-          測定タブで計測を実行してください
+          測定タブで「開始」を押して測定すると、ここに結果が表示されます。保存した結果は「データ」タブから開けます。
         </p>
+        <button type="button" id="goMeasureBtn" class="btn btn-primary btn-sm empty-action">🎤 測定タブへ</button>
       </div>
 
       <!-- 結果コンテンツ -->
@@ -228,6 +281,7 @@
           </div>
           <p class="guide-note">
             有効性: 減衰曲線の直線近似の適合度 R² が 80% を超え、RT60 が算出できたときに「✓ 有効」になります。
+            <button type="button" class="link-btn" data-help="helpGlossary">📖 用語の説明</button>
           </p>
 
           <!-- 「△ 不確実」やクリッピングのときの理由と改善方法 -->
@@ -250,6 +304,9 @@
             <canvas id="irDbChart"></canvas>
           </div>
           <div id="irInfo" class="ir-info"></div>
+          <p class="guide-note">
+            <button type="button" class="link-btn" data-help="termDbfs">📖 S/N・入力レベル（dBFS）などの用語の説明</button>
+          </p>
         </div>
 
         <!-- EDCグラフ -->
@@ -275,6 +332,9 @@
             <input type="text" id="saveName" class="save-input" placeholder="測定名を入力 (例: リビング)" maxlength="50">
             <button id="saveBtn" class="btn btn-primary">保存</button>
           </div>
+          <p class="guide-note">
+            測定が終わると、測定の方式と日時が仮の名前として入ります。部屋の名前などに書き換えて保存できます。
+          </p>
         </div>
       </div>
     </section>
@@ -308,12 +368,18 @@
         <div id="dataEmpty" class="data-empty">
           <div class="empty-icon">📂</div>
           <p>保存されたデータはありません</p>
+          <p class="data-empty-hint">測定したあと、「結果」タブの「💾 測定結果を保存」で名前を付けて保存すると、ここに表示されます</p>
         </div>
       </div>
     </section>
   </main>
 
-  <!-- ===== ヘルプモーダル (初回表示と❓で共有。概要→準備→測定→結果のステップ表示) ===== -->
+  <!-- 対応環境 (README の「対応環境」の表と同じ内容にそろえる) -->
+  <footer class="app-footer">
+    対応環境: iPhone・iPad（Safari / Chrome）、Android（Chrome / Edge）、PC（Chrome / Edge / Firefox / Safari）。マイク付きの端末が必要です。
+  </footer>
+
+  <!-- ===== ヘルプモーダル (初回表示と❓で共有。概要→準備→測定→結果→用語のステップ表示) ===== -->
   <div id="helpModal" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
@@ -325,6 +391,7 @@
         <button type="button" class="step-chip" data-step="1">2 準備</button>
         <button type="button" class="step-chip" data-step="2">3 測定</button>
         <button type="button" class="step-chip" data-step="3">4 結果</button>
+        <button type="button" class="step-chip" data-step="4">5 用語</button>
       </nav>
       <div class="modal-body">
         <section class="guide-step" data-step="0">
@@ -376,6 +443,15 @@
           <p>
             マイクは https:// で始まるページでのみ使えます（PCで動作を試す場合は http://localhost も可）。
           </p>
+
+          <!-- 保存内容は js/storage.js の save()、送信処理が無いことは js/ 全体で確認している -->
+          <h3 id="helpPrivacy">🔒 録音した音声の扱い</h3>
+          <ul>
+            <li>録音した音声は、この端末のブラウザの中だけで解析します。録音した音声や測定結果を外部へ送信することはありません。</li>
+            <li>録音した音声と、そこから求めたインパルス応答の波形は保存しません。解析と結果の表示のためにページを開いている間だけメモリ上に置かれ、ページを閉じるか再読み込みすると消えます。</li>
+            <li>「保存」を押したときに保存されるのは、測定名・日時と、解析結果の数値（RT60・EDT・R²・有効性・周波数帯別の値・サンプリング周波数・IR長）、グラフ用に間引いた減衰曲線（EDC）だけです。保存先はこのブラウザの LocalStorage で、ほかの端末やブラウザからは見えません。ほかにテーマの設定と、初回のヘルプを表示したかどうかを保存します。</li>
+            <li>マイクは最初に「開始」を押してから、入力レベルを表示するためにページを閉じるまで使い続けます。録音して解析するのは測定中だけです。</li>
+          </ul>
         </section>
 
         <section class="guide-step" data-step="2" hidden>
@@ -440,11 +516,97 @@
             結果画面で名前を付けて保存すると、「データ」タブで一覧表示・CSV/JSON での書き出し・削除ができます。
           </p>
         </section>
+
+        <!-- 用語の説明。求め方は js/audio-utils.js (calculateRT60 ほか) と js/pink-tsp.js の実装に合わせている -->
+        <section class="guide-step" data-step="4" hidden>
+          <h3 id="helpGlossary">📖 用語の説明</h3>
+          <p>
+            画面に出てくる用語の意味と、このアプリでの求め方です。
+          </p>
+          <dl class="glossary">
+            <dt>RT60（残響時間）</dt>
+            <dd>
+              音が 60dB 下がるまでの時間（秒）です。このアプリでは、EDC が -5dB から -25dB まで下がる区間を直線で近似し、
+              その傾きのまま 60dB 下がるまでの時間に換算しています（T20 と呼ばれる求め方）。
+            </dd>
+            <dt>EDT（初期減衰時間）</dt>
+            <dd>
+              EDC の最初の 0dB から -10dB までの区間を直線で近似し、その傾きのまま 60dB 下がるまでの時間に換算した値（秒）です。
+              RT60 と同じ尺度で比べられます。減衰の始まりの部分だけを見るため、聞いたときの響きの印象に近いとされます。
+            </dd>
+            <dt>R²（適合度）</dt>
+            <dd>
+              RT60 を求めた区間（EDC の -5〜-25dB）で、EDC が直線にどれだけ当てはまるかを示す値（決定係数）です。
+              100% に近いほど減衰がまっすぐです。80% を超え、RT60 が算出できたときに「✓ 有効」になります。
+            </dd>
+            <dt>EDC（エネルギー減衰曲線）・Schroeder 積分</dt>
+            <dd>
+              インパルス応答の二乗を末尾から積分した（後ろから足し合わせた）曲線で、先頭を 0dB として表示します。
+              音が止んだあとにエネルギーがどう減っていくかを表し、RT60・EDT・R² はこの曲線から求めます。
+            </dd>
+            <dt>周波数帯別 RT60</dt>
+            <dd>
+              中心周波数 125Hz〜4kHz の 6 つのオクターブ帯域ごとに、インパルス応答をバンドパスフィルタに通してから、
+              RT60 と同じ方法で求めた値です。
+            </dd>
+            <dt>インパルス応答（IR）</dt>
+            <dd>
+              部屋で一瞬だけ音を鳴らしたときに、マイクに届く音の時間変化です。
+              インパルス応答方式では手拍子などを録音した波形（音の立ち上がり以降）をそのまま使い、
+              ピンクTSP方式では録音に逆フィルタを掛けて求めます。
+            </dd>
+            <dt>IR長</dt>
+            <dd>
+              RT60 などの算出に使ったインパルス応答の長さです。ピンクTSP方式では、減衰が雑音のレベル付近まで下がった位置で打ち切っています。
+            </dd>
+            <dt>ピンクTSP</dt>
+            <dd>
+              低い音から高い音へ周波数を連続的に変えていく測定音（TSP: 時間引き伸ばしパルス）のうち、
+              オクターブごとのエネルギーが等しくなる（-3dB/oct）ように作ったものです。
+              測定ではこの音をくり返し再生し、録音を同期加算（足し合わせて平均）してからインパルス応答を求めます。
+            </dd>
+            <dt>S/N（推定）</dt>
+            <dd>
+              ピンクTSP方式の結果に表示されます。インパルス応答の直接音のピークと、逆フィルタで求めたインパルス応答（信号長ぶん。IR長で打ち切る前）の最後の 10% の区間に残る雑音（RMS）との比（dB）です。
+              大きいほど雑音に対して測定音が十分に大きく、減衰を深いところまで捉えられます。
+            </dd>
+            <dt id="termDbfs">dBFS・入力レベル</dt>
+            <dd>
+              dBFS は、デジタル信号の最大振幅（フルスケール）を 0dB とした大きさで、値は 0 以下になります。
+              測定タブのメーターは直近 2048 サンプル（約 0.05 秒）の RMS（実効値）を、
+              ピンクTSP方式の結果の「入力レベル」は同期加算した録音 1 周期分の RMS を、dBFS で表しています。
+              <strong>騒音計で測る音圧レベル dB（SPL）とは別のもの</strong>で、同じ音でも端末やマイクの感度、入力の設定によって値が変わります。
+              部屋の騒音の大きさを dB で比べる用途には使えません。
+            </dd>
+            <dt>クリッピング</dt>
+            <dd>
+              入力が大きすぎて録音の値が上限に張り付き、波形がひずむことです。
+              ピンクTSP方式では、最大振幅の 99% 以上に達したサンプルが録音の 0.1% を超えると警告します。
+            </dd>
+          </dl>
+        </section>
       </div>
       <div class="modal-footer">
         <button type="button" id="guidePrev" class="btn btn-outline btn-sm">← 戻る</button>
         <span id="guideStepCount" class="guide-step-count"></span>
         <button type="button" id="guideNext" class="btn btn-primary btn-sm">次へ →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 確認ダイアログ (削除や未保存の結果を失う操作の前に UI.confirm で開く) ===== -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <div class="modal-header">
+        <h2 id="confirmTitle" class="modal-title"></h2>
+        <button type="button" class="modal-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMessage"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="confirmCancel" class="btn btn-outline btn-sm">キャンセル</button>
+        <button type="button" id="confirmOk" class="btn btn-danger btn-sm"></button>
       </div>
     </div>
   </div>
