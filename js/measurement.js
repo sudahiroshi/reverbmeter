@@ -19,6 +19,7 @@ const Measurement = (() => {
     let statusCallback = null;
     let waveformCallback = null;
     let preview = null;              // 再生中の試聴 { ctx, source, gain, onEnded }
+    let abortImpulse = null;         // 進行中のインパルス測定を結果なしで終える関数 (stopMeasurement から呼ぶ)
 
     // 試聴設定
     const PREVIEW_FADE_IN_SEC = 0.3;   // 急に大きな音が出ないよう、冒頭を徐々に大きくする
@@ -177,7 +178,42 @@ const Measurement = (() => {
             recordedSamples = [];
 
             const bufferSize = 4096;
-            scriptNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+            const input = sourceNode;
+            const node = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+            scriptNode = node;
+            let settled = false;
+            let timeoutId = null;
+
+            // この測定で作ったノードとタイマーを片付ける
+            // (残すと、後から始めた測定をこの測定のタイマーが止めてしまう)
+            function cleanup() {
+                settled = true;
+                isMeasuring = false;
+                isRecording = false;
+                clearTimeout(timeoutId);
+                node.onaudioprocess = null;
+                node.disconnect();
+                // disconnect() は出力側しか切らないため、入力側の接続も外す
+                input.disconnect(node);
+                if (scriptNode === node) scriptNode = null;
+                if (abortImpulse === abort) abortImpulse = null;
+            }
+
+            // 録音が終わったとき: 片付けてから解析する
+            function finish() {
+                if (settled) return;
+                cleanup();
+                finishRecording(resolve);
+            }
+
+            // 待機中・録音中に停止されたとき: 結果なしで終える
+            // reject すると呼び出し側が測定エラーとしてコンソールへ出すため、音を検出できなかったときと同じ null にする
+            function abort() {
+                if (settled) return;
+                cleanup();
+                resolve(null);
+            }
+            abortImpulse = abort;
 
             let silenceSamples = 0;
             const silenceThresholdSamples = SILENCE_DURATION * audioCtx.sampleRate;
@@ -189,7 +225,7 @@ const Measurement = (() => {
 
             if (statusCallback) statusCallback('waiting');
 
-            scriptNode.onaudioprocess = (e) => {
+            node.onaudioprocess = (e) => {
                 // 出力は無音のまま (マイク入力をスピーカーへ返すと自分の音を再録音してしまう)
                 const inputData = e.inputBuffer.getChannelData(0);
 
@@ -239,38 +275,29 @@ const Measurement = (() => {
 
                     // 静寂が続いたら終了
                     if (silenceSamples >= silenceThresholdSamples || totalSamples >= maxSamples) {
-                        finishRecording(resolve);
+                        finish();
                     }
                 }
             };
 
-            sourceNode.connect(scriptNode);
-            scriptNode.connect(audioCtx.destination);
+            input.connect(node);
+            node.connect(audioCtx.destination);
 
             // タイムアウト (最大録音時間)
-            setTimeout(() => {
-                if (isMeasuring && triggered) {
-                    finishRecording(resolve);
-                } else if (isMeasuring && !triggered) {
-                    stopMeasurement();
-                    resolve(null);
+            timeoutId = setTimeout(() => {
+                if (triggered) {
+                    finish();
+                } else {
+                    stopMeasurement(); // abort() を通じて null で終える
                 }
             }, (MAX_RECORD_SECONDS + 5) * 1000);
         });
     }
 
     /**
-     * 録音を完了し結果を処理
+     * 録音を完了し結果を処理 (録音処理の片付けは呼び出し側で済ませておく)
      */
     async function finishRecording(resolve) {
-        isMeasuring = false;
-        isRecording = false;
-
-        if (scriptNode) {
-            scriptNode.disconnect();
-            scriptNode = null;
-        }
-
         if (statusCallback) statusCallback('processing');
 
         const rawData = new Float32Array(recordedSamples);
@@ -605,6 +632,8 @@ const Measurement = (() => {
      * 測定を停止
      */
     function stopMeasurement() {
+        // 待機中・録音中のインパルス測定は、ここで Promise を終わらせる (片付けもその中で行う)
+        if (abortImpulse) abortImpulse();
         isMeasuring = false;
         isRecording = false;
         if (scriptNode) {
