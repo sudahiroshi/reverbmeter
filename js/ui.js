@@ -70,6 +70,33 @@ const UI = (() => {
     }
 
     /**
+     * 測定タブの案内を測定モードに合わせる (data-only の項目の表示は CSS で切り替える)
+     */
+    function setMeasureMode(mode) {
+        const panel = document.getElementById('measure');
+        if (panel) panel.dataset.mode = mode;
+        updatePreCheckCount();
+    }
+
+    /**
+     * 測定前チェックリストの確認済み件数を更新する (表示中のモードの項目だけ数える)
+     */
+    function updatePreCheckCount() {
+        const panel = document.getElementById('measure');
+        const countEl = document.getElementById('preCheckCount');
+        if (!panel || !countEl) return;
+
+        const mode = panel.dataset.mode;
+        const items = Array.from(panel.querySelectorAll('.check-list li'))
+            .filter(li => !li.dataset.only || li.dataset.only === mode);
+        const checked = items.filter(li => li.querySelector('.pre-check').checked).length;
+        const done = checked === items.length;
+
+        countEl.textContent = `${done ? '✓ ' : ''}${checked} / ${items.length} 確認済み`;
+        countEl.classList.toggle('done', done);
+    }
+
+    /**
      * モーダルを表示
      */
     function showModal(modalId) {
@@ -408,6 +435,8 @@ const UI = (() => {
         initTheme,
         toggleTheme,
         switchTab,
+        setMeasureMode,
+        updatePreCheckCount,
         showModal,
         closeModal,
         showToast,

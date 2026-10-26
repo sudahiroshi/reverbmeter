@@ -52,7 +52,26 @@
     <!-- ==============================
          測定タブ
          ============================== -->
-    <section id="measure" class="tab-panel active" role="tabpanel">
+    <section id="measure" class="tab-panel active" role="tabpanel" data-mode="impulse">
+
+      <!-- 測定前チェックリスト (data-only の項目は選択中の測定モードでだけ表示する) -->
+      <details id="preCheck" class="card guide-card" open>
+        <summary class="card-title guide-summary">
+          📋 測定前に確認すること
+          <span id="preCheckCount" class="guide-count" aria-live="polite"></span>
+        </summary>
+        <ul class="check-list">
+          <li><label><input type="checkbox" class="pre-check">窓とドアを閉め、エアコン・換気扇・空気清浄機など音の出る機器を止めた</label></li>
+          <li><label><input type="checkbox" class="pre-check">室内は測定者だけにし、測定中は動かず、話さずにいられる</label></li>
+          <li><label><input type="checkbox" class="pre-check">端末を壁や大きな家具から離して持ち、マイクを手や物でふさいでいない</label></li>
+          <li data-only="impulse"><label><input type="checkbox" class="pre-check">手拍子（または風船）は、マイクから1〜2m離れた位置で1回だけ鳴らす</label></li>
+          <li data-only="tsp"><label><input type="checkbox" class="pre-check">消音（マナー）モードを解除し、端末の音量を中〜大にした</label></li>
+          <li data-only="tsp"><label><input type="checkbox" class="pre-check">イヤホン・ヘッドホンを外し、部屋に音が出るスピーカーから再生される状態にした</label></li>
+        </ul>
+        <p class="guide-note">
+          チェックしなくても測定できます。結果が「△ 不確実」になったときは、この項目を見直してください。
+        </p>
+      </details>
 
       <!-- 測定モード選択 -->
       <div class="card">

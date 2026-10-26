@@ -55,6 +55,7 @@ const App = (() => {
                 document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 Measurement.setMode(btn.dataset.mode);
+                UI.setMeasureMode(btn.dataset.mode);
 
                 // ピンクTSP設定の表示切替
                 const tspSettings = document.getElementById('tspSettings');
@@ -63,6 +64,12 @@ const App = (() => {
                 }
             });
         });
+
+        // 測定前チェックリスト
+        document.querySelectorAll('.pre-check').forEach(cb => {
+            cb.addEventListener('change', UI.updatePreCheckCount);
+        });
+        UI.updatePreCheckCount();
 
         // 測定ボタン
         document.getElementById('measureBtn')?.addEventListener('click', startMeasurement);
