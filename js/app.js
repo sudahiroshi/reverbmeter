@@ -313,9 +313,9 @@ const App = (() => {
         }
 
         if (levelFill) {
-            // -60dB〜0dBを0%〜100%にマップ
+            // -60dB〜0dBを0%〜100%にマップ (帯の色と位置をそろえるため、幅ではなく右側を隠して表す)
             const percent = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
-            levelFill.style.width = percent + '%';
+            levelFill.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
         }
     }
 
