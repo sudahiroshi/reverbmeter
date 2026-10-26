@@ -8,7 +8,6 @@ const Measurement = (() => {
     let mediaStream = null;
     let sourceNode = null;
     let analyserNode = null;
-    let scriptNode = null;
     let isRecording = false;
     let isMeasuring = false;
     let recordedChunks = [];
@@ -19,7 +18,7 @@ const Measurement = (() => {
     let statusCallback = null;
     let waveformCallback = null;
     let preview = null;              // 再生中の試聴 { ctx, source, gain, onEnded }
-    let abortImpulse = null;         // 進行中のインパルス測定を結果なしで終える関数 (stopMeasurement から呼ぶ)
+    let abortMeasurement = null;     // 進行中の測定を結果なしで終える関数 (stopMeasurement から呼ぶ)
 
     // 試聴設定
     const PREVIEW_FADE_IN_SEC = 0.3;   // 急に大きな音が出ないよう、冒頭を徐々に大きくする
@@ -106,7 +105,6 @@ const Measurement = (() => {
         }
         sourceNode = null;
         analyserNode = null;
-        scriptNode = null;
     }
 
     /**
@@ -159,6 +157,53 @@ const Measurement = (() => {
     }
 
     /**
+     * 測定 1 回分の録音ノードとタイマーを用意する (両測定方式で共通)
+     * 測定ごとに settled を持ち、録音の完了・タイムアウト・停止のうち最初の 1 つだけが測定を終える。
+     * 停止 (stopMeasurement) されたときは片付けてから null で resolve する
+     * (reject すると呼び出し側が測定エラーとしてコンソールへ出すため、インパルス方式で音を検出できなかったときと同じ null にする)
+     * @param {object} opts
+     * @param {Function} opts.resolve - 測定の Promise の resolve
+     * @param {number} opts.timeoutMs - この時間が過ぎたら onTimeout を呼ぶ
+     * @param {Function} opts.onTimeout
+     * @param {Function} [opts.release] - 方式ごとの追加の後片付け (測定音の再生停止など)
+     * @returns {{node: ScriptProcessorNode, settle: Function}} settle() は片付けて true を返す。すでに終わっていれば何もせず false
+     */
+    function beginCapture({ resolve, timeoutMs, onTimeout, release }) {
+        const input = sourceNode;
+        const node = audioCtx.createScriptProcessor(4096, 1, 1);
+        let settled = false;
+
+        // この測定で作ったノードとタイマーを片付ける
+        // (残すと、後から始めた測定をこの測定のタイマーが止めてしまう)
+        function settle() {
+            if (settled) return false;
+            settled = true;
+            isMeasuring = false;
+            isRecording = false;
+            clearTimeout(timeoutId);
+            node.onaudioprocess = null;
+            node.disconnect();
+            // disconnect() は出力側しか切らないため、入力側の接続も外す
+            input.disconnect(node);
+            if (release) release();
+            if (abortMeasurement === abort) abortMeasurement = null;
+            return true;
+        }
+
+        function abort() {
+            if (settle()) resolve(null);
+        }
+
+        isMeasuring = true;
+        abortMeasurement = abort;
+        input.connect(node);
+        node.connect(audioCtx.destination);
+        const timeoutId = setTimeout(onTimeout, timeoutMs);
+
+        return { node, settle };
+    }
+
+    /**
      * インパルス応答方式の測定を開始
      */
     async function startImpulseMeasurement() {
@@ -172,48 +217,28 @@ const Measurement = (() => {
             await audioCtx.resume();
         }
 
-        return new Promise((resolve, reject) => {
-            isMeasuring = true;
+        return new Promise((resolve) => {
             isRecording = false;
             recordedSamples = [];
 
-            const bufferSize = 4096;
-            const input = sourceNode;
-            const node = audioCtx.createScriptProcessor(bufferSize, 1, 1);
-            scriptNode = node;
-            let settled = false;
-            let timeoutId = null;
-
-            // この測定で作ったノードとタイマーを片付ける
-            // (残すと、後から始めた測定をこの測定のタイマーが止めてしまう)
-            function cleanup() {
-                settled = true;
-                isMeasuring = false;
-                isRecording = false;
-                clearTimeout(timeoutId);
-                node.onaudioprocess = null;
-                node.disconnect();
-                // disconnect() は出力側しか切らないため、入力側の接続も外す
-                input.disconnect(node);
-                if (scriptNode === node) scriptNode = null;
-                if (abortImpulse === abort) abortImpulse = null;
-            }
+            // 待機中・録音中に停止されたときは、beginCapture の中で null を resolve する
+            const { node, settle } = beginCapture({
+                resolve,
+                timeoutMs: (MAX_RECORD_SECONDS + 5) * 1000,
+                // タイムアウト (最大録音時間)
+                onTimeout: () => {
+                    if (triggered) {
+                        finish();
+                    } else {
+                        stopMeasurement(); // 停止と同じく null で終える
+                    }
+                }
+            });
 
             // 録音が終わったとき: 片付けてから解析する
             function finish() {
-                if (settled) return;
-                cleanup();
-                finishRecording(resolve);
+                if (settle()) finishRecording(resolve);
             }
-
-            // 待機中・録音中に停止されたとき: 結果なしで終える
-            // reject すると呼び出し側が測定エラーとしてコンソールへ出すため、音を検出できなかったときと同じ null にする
-            function abort() {
-                if (settled) return;
-                cleanup();
-                resolve(null);
-            }
-            abortImpulse = abort;
 
             let silenceSamples = 0;
             const silenceThresholdSamples = SILENCE_DURATION * audioCtx.sampleRate;
@@ -279,18 +304,6 @@ const Measurement = (() => {
                     }
                 }
             };
-
-            input.connect(node);
-            node.connect(audioCtx.destination);
-
-            // タイムアウト (最大録音時間)
-            timeoutId = setTimeout(() => {
-                if (triggered) {
-                    finish();
-                } else {
-                    stopMeasurement(); // abort() を通じて null で終える
-                }
-            }, (MAX_RECORD_SECONDS + 5) * 1000);
         });
     }
 
@@ -321,7 +334,7 @@ const Measurement = (() => {
      * 逆フィルタでデコンボリューションしてインパルス応答を得る。
      * 先頭1周期を捨てることで、再生と録音のレイテンシが未知でも整合がとれる。
      * @param {object} options - PinkTSP.DEFAULTS を上書きするパラメータ
-     * @returns {Promise<object>} 解析結果
+     * @returns {Promise<object|null>} 解析結果。停止したときは null
      */
     async function startPinkTspMeasurement(options = {}) {
         if (!audioCtx || !sourceNode) {
@@ -344,8 +357,6 @@ const Measurement = (() => {
         const playRepeats = tsp.params.averages + 2;
 
         return new Promise((resolve, reject) => {
-            let settled = false;
-            let timeoutId = null;
             const recordBuffer = new Float32Array(requiredSamples);
             let writeIndex = 0;
 
@@ -363,30 +374,30 @@ const Measurement = (() => {
             tspSource.connect(gainNode);
             gainNode.connect(audioCtx.destination);
 
-            isMeasuring = true;
             isRecording = true;
 
-            const bufferSize = 4096;
-            scriptNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
-
-            function cleanup() {
-                isRecording = false;
-                isMeasuring = false;
-                if (timeoutId) clearTimeout(timeoutId);
-                try { tspSource.stop(); } catch (e) { /* 再生済みなら無視 */ }
-                tspSource.disconnect();
-                gainNode.disconnect();
-                if (scriptNode) {
-                    scriptNode.disconnect();
-                    scriptNode.onaudioprocess = null;
-                    scriptNode = null;
+            // 停止されたときは、beginCapture の中で測定音の再生を止めてから null を resolve する
+            const { node, settle } = beginCapture({
+                resolve,
+                // 再生が終わっても必要サンプル数に届かない場合の保険
+                timeoutMs: (playBuffer.duration + 3) * 1000,
+                onTimeout: () => {
+                    if (writeIndex >= 2 * tsp.length) {
+                        finish();
+                    } else if (settle()) {
+                        if (statusCallback) statusCallback('idle');
+                        reject(new Error('録音データが不足しました。マイクの状態を確認してください'));
+                    }
+                },
+                release: () => {
+                    try { tspSource.stop(); } catch (e) { /* 再生済みなら無視 */ }
+                    tspSource.disconnect();
+                    gainNode.disconnect();
                 }
-            }
+            });
 
             async function finish() {
-                if (settled) return;
-                settled = true;
-                cleanup();
+                if (!settle()) return;
 
                 if (statusCallback) statusCallback('processing');
 
@@ -406,7 +417,7 @@ const Measurement = (() => {
                 }
             }
 
-            scriptNode.onaudioprocess = (e) => {
+            node.onaudioprocess = (e) => {
                 // 出力は無音にする (マイク入力をスピーカーへ返すとハウリングし測定が壊れる)
                 const inputData = e.inputBuffer.getChannelData(0);
                 if (!isRecording) return;
@@ -423,26 +434,8 @@ const Measurement = (() => {
                 }
             };
 
-            sourceNode.connect(scriptNode);
-            scriptNode.connect(audioCtx.destination);
-
             tspSource.start(0);
             if (statusCallback) statusCallback('tsp-playing');
-
-            // 再生が終わっても必要サンプル数に届かない場合の保険
-            const timeoutMs = (playBuffer.duration + 3) * 1000;
-            timeoutId = setTimeout(() => {
-                if (settled) return;
-                isRecording = false;
-                if (writeIndex >= 2 * tsp.length) {
-                    finish();
-                } else {
-                    settled = true;
-                    cleanup();
-                    if (statusCallback) statusCallback('idle');
-                    reject(new Error('録音データが不足しました。マイクの状態を確認してください'));
-                }
-            }, timeoutMs);
         });
     }
 
@@ -632,14 +625,8 @@ const Measurement = (() => {
      * 測定を停止
      */
     function stopMeasurement() {
-        // 待機中・録音中のインパルス測定は、ここで Promise を終わらせる (片付けもその中で行う)
-        if (abortImpulse) abortImpulse();
-        isMeasuring = false;
-        isRecording = false;
-        if (scriptNode) {
-            scriptNode.disconnect();
-            scriptNode = null;
-        }
+        // 待機中・録音中・再生中の測定は、ここで Promise を null で終わらせる (片付けもその中で行う)
+        if (abortMeasurement) abortMeasurement();
         if (statusCallback) statusCallback('idle');
     }
 
