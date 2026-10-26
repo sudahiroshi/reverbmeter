@@ -130,7 +130,7 @@ const UI = (() => {
         toast.className = `toast ${type}`;
 
         const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
-        toast.innerHTML = `<span>${icon}</span> ${message}`;
+        toast.innerHTML = `<span>${icon}</span> ${escapeHtml(String(message))}`;
 
         container.appendChild(toast);
 
