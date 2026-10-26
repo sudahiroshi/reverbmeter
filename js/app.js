@@ -31,8 +31,15 @@ const App = (() => {
 
         // ヘルプボタン
         document.getElementById('helpBtn')?.addEventListener('click', () => {
-            UI.showModal('helpModal');
+            UI.openHelp();
         });
+
+        // ヘルプのステップ切替
+        document.querySelectorAll('#helpModal .step-chip').forEach(chip => {
+            chip.addEventListener('click', () => UI.showGuideStep(Number(chip.dataset.step)));
+        });
+        document.getElementById('guidePrev')?.addEventListener('click', UI.prevGuideStep);
+        document.getElementById('guideNext')?.addEventListener('click', UI.nextGuideStep);
 
         // モーダルを閉じる
         document.querySelectorAll('.modal-close').forEach(btn => {
@@ -124,7 +131,7 @@ const App = (() => {
         // 初回訪問時にヘルプを表示
         if (!localStorage.getItem('reverberation_visited')) {
             setTimeout(() => {
-                UI.showModal('helpModal');
+                UI.openHelp();
                 localStorage.setItem('reverberation_visited', 'true');
             }, 500);
         }

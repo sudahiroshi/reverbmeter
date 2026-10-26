@@ -5,6 +5,7 @@
 
 const UI = (() => {
     const THEME_KEY = 'reverberation_theme';
+    let guideStep = 0; // ヘルプで表示中のステップ
 
     /**
      * テーマを初期化
@@ -214,13 +215,60 @@ const UI = (() => {
     }
 
     /**
-     * ヘルプを開き、指定した見出しまでスクロールする
+     * ヘルプを開く。anchorId を指定すると、その見出しを含むステップを開いてスクロールする
      */
     function openHelp(anchorId) {
+        const anchor = anchorId ? document.getElementById(anchorId) : null;
+        const step = anchor?.closest('.guide-step');
         showModal('helpModal');
-        if (anchorId) {
-            document.getElementById(anchorId)?.scrollIntoView({ block: 'start' });
+        showGuideStep(step ? Number(step.dataset.step) : 0);
+        if (anchor) anchor.scrollIntoView({ block: 'start' });
+    }
+
+    /**
+     * ヘルプの指定ステップ (0:概要 1:準備 2:測定 3:結果) を表示する
+     */
+    function showGuideStep(index) {
+        const modal = document.getElementById('helpModal');
+        if (!modal) return;
+
+        const steps = modal.querySelectorAll('.guide-step');
+        guideStep = Math.max(0, Math.min(steps.length - 1, index));
+        const isLast = guideStep === steps.length - 1;
+
+        steps.forEach((section, i) => { section.hidden = i !== guideStep; });
+        modal.querySelectorAll('.step-chip').forEach((chip, i) => {
+            chip.classList.toggle('active', i === guideStep);
+            if (i === guideStep) {
+                chip.setAttribute('aria-current', 'step');
+            } else {
+                chip.removeAttribute('aria-current');
+            }
+        });
+
+        document.getElementById('guidePrev').disabled = guideStep === 0;
+        document.getElementById('guideNext').textContent = isLast ? 'はじめる' : '次へ →';
+        document.getElementById('guideStepCount').textContent = `${guideStep + 1} / ${steps.length}`;
+        modal.querySelector('.modal-body').scrollTop = 0;
+    }
+
+    /**
+     * ヘルプの次のステップへ進む (最後のステップでは閉じる)
+     */
+    function nextGuideStep() {
+        const total = document.querySelectorAll('#helpModal .guide-step').length;
+        if (guideStep >= total - 1) {
+            closeModal('helpModal');
+        } else {
+            showGuideStep(guideStep + 1);
         }
+    }
+
+    /**
+     * ヘルプの前のステップへ戻る
+     */
+    function prevGuideStep() {
+        showGuideStep(guideStep - 1);
     }
 
     /**
@@ -505,6 +553,9 @@ const UI = (() => {
         showMeasureAlert,
         clearMeasureAlert,
         openHelp,
+        showGuideStep,
+        nextGuideStep,
+        prevGuideStep,
         confirm,
         updateMeasureStatus,
         displayResults,

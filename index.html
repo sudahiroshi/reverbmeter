@@ -313,81 +313,138 @@
     </section>
   </main>
 
-  <!-- ===== ヘルプモーダル ===== -->
+  <!-- ===== ヘルプモーダル (初回表示と❓で共有。概要→準備→測定→結果のステップ表示) ===== -->
   <div id="helpModal" class="modal-overlay">
     <div class="modal">
       <div class="modal-header">
         <h2 class="modal-title">📐 ReverbMeter の使い方</h2>
         <button class="modal-close" aria-label="閉じる">×</button>
       </div>
+      <nav class="guide-step-nav" aria-label="使い方のステップ">
+        <button type="button" class="step-chip" data-step="0">1 概要</button>
+        <button type="button" class="step-chip" data-step="1">2 準備</button>
+        <button type="button" class="step-chip" data-step="2">3 測定</button>
+        <button type="button" class="step-chip" data-step="3">4 結果</button>
+      </nav>
       <div class="modal-body">
-        <h3>🎯 残響時間（RT60）とは？</h3>
-        <p>
-          音源が停止してから音圧レベルが60dB低下するまでの時間です。
-          室内の音響特性を表す基本的な指標で、部屋の大きさや素材によって変わります。
-        </p>
+        <section class="guide-step" data-step="0">
+          <h3>🎯 残響時間（RT60）とは？</h3>
+          <p>
+            音源が停止してから音圧レベルが60dB低下するまでの時間です。
+            室内の音響特性を表す基本的な指標で、部屋の大きさや素材によって変わります。
+          </p>
 
-        <h3>👏 インパルス応答方式</h3>
-        <p>
-          手拍子や風船割りなどの短い衝撃音を使って測定します。
-        </p>
-        <ul>
-          <li>「開始」ボタンをタップ</li>
-          <li>マイクへのアクセスを許可</li>
-          <li>画面が「待機中」になったら、手拍子を1回鳴らす</li>
-          <li>自動的に録音・解析が行われます</li>
-        </ul>
+          <h3>📐 このアプリでできること</h3>
+          <p>
+            端末のマイクで部屋の響きを録音し、残響時間（RT60）を測定します。音源は2種類から選べます。
+          </p>
+          <ul>
+            <li><strong>👏 インパルス応答</strong>: 手拍子や風船割りの音で測ります。手軽に試せます</li>
+            <li><strong>📡 ピンクTSP</strong>: 端末のスピーカーから測定音を鳴らして測ります。手拍子より精度の高い測定ができます</li>
+          </ul>
 
-        <h3>📡 ピンクTSP方式</h3>
-        <p>
-          スピーカーからピンクTSP（ピンク特性の時間引き伸ばしパルス）を再生し、
-          録音した応答に逆フィルタを掛けてインパルス応答を求めます。
-          スピーカーが必要ですが、手拍子より精度の高い測定ができます。
-        </p>
-        <ul>
-          <li>「ピンクTSP」モードを選択</li>
-          <li>必要に応じて信号長・周波数範囲・同期加算回数を設定</li>
-          <li>「開始」ボタンをタップ</li>
-          <li>スピーカーから信号が再生され、自動的に録音・解析が行われます</li>
-        </ul>
-        <p>
-          ピンクTSPはパワーが 1/f（オクターブあたり一定エネルギー、-3dB/oct）になるよう
-          設計された測定信号です。白色TSPのように高域へエネルギーが偏らないため、
-          室内測定で不足しがちな低域のS/Nを確保でき、スピーカーの過大入力も避けられます。
-        </p>
+          <h3>🧭 測定の流れ</h3>
+          <ol>
+            <li><strong>準備</strong>: 部屋を静かにし、マイクを使えるようにする</li>
+            <li><strong>測定</strong>: 測定モードを選んで「開始」を押す</li>
+            <li><strong>結果</strong>: 残響時間と有効性を確認し、名前を付けて保存する</li>
+          </ol>
+        </section>
 
-        <h3 id="helpMicPermission">🎙️ マイクを許可する方法</h3>
-        <p>
-          許可を求める表示が出ない場合や「許可しない」を選んだ場合は、次の場所でマイクを許可に変更し、
-          ページを再読み込みしてください。
-        </p>
-        <ul>
-          <li><strong>iPhone Safari</strong>: 「設定」→「Safari」→「マイク」で許可を確認</li>
-          <li><strong>Android Chrome</strong>: アドレスバー左の 🔒 アイコン →「サイトの設定」→「マイク」を許可</li>
-          <li><strong>PC Chrome</strong>: アドレスバー左の 🔒 アイコン →「マイク」を許可に変更</li>
-        </ul>
-        <p>
-          マイクは https:// で始まるページでのみ使えます（PCで動作を試す場合は http://localhost も可）。
-        </p>
+        <section class="guide-step" data-step="1" hidden>
+          <h3>✅ 測定前に確認すること</h3>
+          <p>
+            「測定」タブの一番上にある「📋 測定前に確認すること」で、測定前に次のような点を確認できます。
+          </p>
+          <ul>
+            <li>窓とドアを閉め、エアコンや換気扇など音の出る機器を止める</li>
+            <li>測定中は動かず、話さずにいる</li>
+            <li>マイク（ピンクTSPではスピーカーも）を手や物でふさがない</li>
+            <li>ピンクTSPでは消音（マナー）モードを解除し、端末の音量を上げておく</li>
+          </ul>
 
-        <h3>💡 より正確な結果を得るコツ</h3>
-        <ul>
-          <li>できるだけ静かな環境で測定する</li>
-          <li>マイクから1〜2m離れた位置で音を鳴らす</li>
-          <li>手拍子は1回だけ、はっきりと鳴らす</li>
-          <li>エアコンや換気扇などの背景騒音を止める</li>
-          <li>複数回測定して平均をとると安定した結果が得られます</li>
-        </ul>
+          <h3 id="helpMicPermission">🎙️ マイクを許可する方法</h3>
+          <p>
+            許可を求める表示が出ない場合や「許可しない」を選んだ場合は、次の場所でマイクを許可に変更し、
+            ページを再読み込みしてください。
+          </p>
+          <ul>
+            <li><strong>iPhone Safari</strong>: 「設定」→「Safari」→「マイク」で許可を確認</li>
+            <li><strong>Android Chrome</strong>: アドレスバー左の 🔒 アイコン →「サイトの設定」→「マイク」を許可</li>
+            <li><strong>PC Chrome</strong>: アドレスバー左の 🔒 アイコン →「マイク」を許可に変更</li>
+          </ul>
+          <p>
+            マイクは https:// で始まるページでのみ使えます（PCで動作を試す場合は http://localhost も可）。
+          </p>
+        </section>
 
-        <h3>📊 結果の見方</h3>
-        <ul>
-          <li><strong>RT60</strong>: 残響時間（秒）。一般的な部屋は0.3〜1.0秒</li>
-          <li><strong>EDT</strong>: 初期減衰時間。体感的な残響感を示します</li>
-          <li><strong>R²</strong>: 減衰曲線の直線近似の適合度。80%を超え、RT60が算出できれば「✓ 有効」、それ以外は「△ 不確実」になります</li>
-          <li><strong>周波数帯別</strong>: 低音から高音まで帯域ごとのRT60</li>
-          <li><strong>インパルス応答(IR)</strong>: 音源から耳（マイク）までの応答波形。
-            dB表示のSchroeder積分曲線が直線的に下がっていれば良好な測定です</li>
-        </ul>
+        <section class="guide-step" data-step="2" hidden>
+          <h3>👏 インパルス応答方式</h3>
+          <p>
+            手拍子や風船割りなどの短い衝撃音を使って測定します。
+          </p>
+          <ul>
+            <li>「開始」ボタンをタップ</li>
+            <li>マイクへのアクセスを許可</li>
+            <li>画面が「待機中」になったら、手拍子を1回鳴らす</li>
+            <li>自動的に録音・解析が行われます</li>
+          </ul>
+
+          <h3>📡 ピンクTSP方式</h3>
+          <p>
+            スピーカーからピンクTSP（ピンク特性の時間引き伸ばしパルス）を再生し、
+            録音した応答に逆フィルタを掛けてインパルス応答を求めます。
+            スピーカーが必要ですが、手拍子より精度の高い測定ができます。
+          </p>
+          <ul>
+            <li>「ピンクTSP」モードを選択</li>
+            <li>必要に応じて信号長・周波数範囲・同期加算回数を設定</li>
+            <li>「開始」ボタンをタップ</li>
+            <li>スピーカーから信号が再生され、自動的に録音・解析が行われます</li>
+          </ul>
+          <p>
+            ピンクTSPはパワーが 1/f（オクターブあたり一定エネルギー、-3dB/oct）になるよう
+            設計された測定信号です。白色TSPのように高域へエネルギーが偏らないため、
+            室内測定で不足しがちな低域のS/Nを確保でき、スピーカーの過大入力も避けられます。
+          </p>
+
+          <h3>💡 より正確な結果を得るコツ</h3>
+          <ul>
+            <li>できるだけ静かな環境で測定する</li>
+            <li>マイクから1〜2m離れた位置で音を鳴らす</li>
+            <li>手拍子は1回だけ、はっきりと鳴らす</li>
+            <li>エアコンや換気扇などの背景騒音を止める</li>
+            <li>複数回測定して平均をとると安定した結果が得られます</li>
+          </ul>
+        </section>
+
+        <section class="guide-step" data-step="3" hidden>
+          <h3>📊 結果の見方</h3>
+          <ul>
+            <li><strong>RT60</strong>: 残響時間（秒）。一般的な部屋は0.3〜1.0秒</li>
+            <li><strong>EDT</strong>: 初期減衰時間。体感的な残響感を示します</li>
+            <li><strong>R²</strong>: 減衰曲線の直線近似の適合度。80%を超え、RT60が算出できれば「✓ 有効」、それ以外は「△ 不確実」になります</li>
+            <li><strong>周波数帯別</strong>: 低音から高音まで帯域ごとのRT60</li>
+            <li><strong>インパルス応答(IR)</strong>: 音源から耳（マイク）までの応答波形。
+              dB表示のSchroeder積分曲線が直線的に下がっていれば良好な測定です</li>
+          </ul>
+
+          <h3>△ 「不確実」と表示されたら</h3>
+          <p>
+            結果のサマリーの下に、理由と改善方法が表示されます。
+            「🎤 測定タブで再測定する」を押すと、測定前チェックリストを開いた状態で測定タブに戻ります。
+          </p>
+
+          <h3>💾 保存と書き出し</h3>
+          <p>
+            結果画面で名前を付けて保存すると、「データ」タブで一覧表示・CSV/JSON での書き出し・削除ができます。
+          </p>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="guidePrev" class="btn btn-outline btn-sm">← 戻る</button>
+        <span id="guideStepCount" class="guide-step-count"></span>
+        <button type="button" id="guideNext" class="btn btn-primary btn-sm">次へ →</button>
       </div>
     </div>
   </div>
