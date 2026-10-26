@@ -8,6 +8,17 @@ const App = (() => {
     let currentSavedId = null; // currentResult を保存した (または開いた) 保存データのID
     let suggestedName = '';    // 保存欄に入れた測定名の既定値
     let micInitialized = false;
+    let stopRequested = false; // 進行中の測定を利用者が停止ボタンで止めたか (測定の結果なしを失敗と区別する)
+
+    /*
+     * レベルメーターの適正範囲 (dBFS)。メーターの帯と凡例の数値はここから作る (README の表も同じ値)
+     * - low 未満は小さすぎ: インパルス方式が静寂とみなすレベル
+     *   (measurement.js の SILENCE_THRESHOLD 0.005 ≈ -46 dBFS) に近く、背景音と区別しにくい
+     * - high 超は大きすぎ: メーターは 2048 サンプル窓の RMS で、ピンクTSP の窓内の
+     *   ピーク/RMS 比は最大で約 8.5 dB。-10 dBFS 以下ならピークがクリッピング判定
+     *   (pink-tsp.js の CLIP_LEVEL 0.99 ≈ -0.1 dBFS) に届かない
+     */
+    const LEVEL_RANGE = { low: -40, high: -10 };
 
     /**
      * アプリケーション初期化
@@ -18,6 +29,9 @@ const App = (() => {
 
         // 波形キャンバス初期化
         Visualization.initWaveform('waveformCanvas');
+
+        // レベルメーターの適正範囲の帯と凡例
+        initLevelRange();
 
         // タブナビゲーション
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -68,7 +82,9 @@ const App = (() => {
         // 確認ダイアログ
         document.getElementById('confirmOk')?.addEventListener('click', () => UI.answerConfirm(true));
         document.getElementById('confirmCancel')?.addEventListener('click', () => UI.answerConfirm(false));
-        document.addEventListener('keydown', UI.handleConfirmKeydown);
+
+        // モーダル (ヘルプ・確認ダイアログ) の Esc と Tab の循環
+        document.addEventListener('keydown', UI.handleModalKeydown);
 
         // 未保存の測定結果はメモリにしか無いため、再読み込みや閉じる前に確認する
         // (この場面ではアプリ内のダイアログを出せず、ブラウザ標準の確認になる)
@@ -186,6 +202,7 @@ const App = (() => {
      */
     async function startMeasurement() {
         if (Measurement.getIsMeasuring()) {
+            stopRequested = true;
             Measurement.stopMeasurement();
             return;
         }
@@ -225,6 +242,7 @@ const App = (() => {
 
         const mode = Measurement.getMode();
         let result = null;
+        stopRequested = false;
 
         try {
             if (mode === 'tsp') {
@@ -257,7 +275,9 @@ const App = (() => {
             setTimeout(() => {
                 UI.switchTab('results');
             }, 1000);
-        } else {
+        } else if (!stopRequested) {
+            // 利用者が止めたときは失敗ではないので案内しない
+            // (待機のタイムアウトなど Measurement の中で結果なしに終わったときは、従来どおり案内する)
             UI.showMeasureAlert({
                 title: '測定に失敗しました',
                 body: '音を検出できなかったか、解析に失敗しました。周囲を静かにして、もう一度「開始」を押してください。'
@@ -331,6 +351,27 @@ const App = (() => {
     }
 
     /**
+     * レベルメーターの帯の境界 (CSS の --level-low / --level-high) と凡例の数値を LEVEL_RANGE から設定する
+     */
+    function initLevelRange() {
+        const meter = document.querySelector('.level-meter');
+        if (meter) {
+            meter.style.setProperty('--level-low', `${levelToPercent(LEVEL_RANGE.low)}%`);
+            meter.style.setProperty('--level-high', `${levelToPercent(LEVEL_RANGE.high)}%`);
+        }
+        document.querySelectorAll('[data-level-bound]').forEach(el => {
+            el.textContent = LEVEL_RANGE[el.dataset.levelBound];
+        });
+    }
+
+    /**
+     * dBFS をメーター上の位置 (-60dB〜0dB を 0%〜100%) に変換する
+     */
+    function levelToPercent(db) {
+        return Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+    }
+
+    /**
      * レベルメーターを更新
      */
     function updateLevelMeter(db, rms) {
@@ -343,8 +384,8 @@ const App = (() => {
         }
 
         if (levelFill) {
-            // -60dB〜0dBを0%〜100%にマップ (帯の色と位置をそろえるため、幅ではなく右側を隠して表す)
-            const percent = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+            // 帯の色と位置をそろえるため、幅ではなく右側を隠して表す
+            const percent = levelToPercent(db);
             levelFill.style.clipPath = `inset(0 ${100 - percent}% 0 0)`;
         }
     }
@@ -400,6 +441,10 @@ const App = (() => {
     async function viewResult(id) {
         const entry = Storage.getById(id);
         if (!entry) return;
+        if (!Storage.isReadable(entry)) {
+            UI.showToast('この保存データは壊れているため開けません', 'error');
+            return;
+        }
 
         if (hasUnsavedResult() && !await UI.confirm({
             title: '保存していない測定結果があります',
@@ -473,8 +518,11 @@ const App = (() => {
      * 1件エクスポート
      */
     function exportSingle(id, format) {
-        Storage.exportSingle(id, format);
-        UI.showToast(`${format.toUpperCase()}ファイルをダウンロードしました`, 'success');
+        if (Storage.exportSingle(id, format)) {
+            UI.showToast(`${format.toUpperCase()}ファイルをダウンロードしました`, 'success');
+        } else {
+            UI.showToast('この保存データは書き出せません', 'error');
+        }
     }
 
     /**
@@ -488,8 +536,15 @@ const App = (() => {
         }
 
         const ids = Array.from(checked).map(cb => cb.value);
-        Storage.exportMultiple(ids, format);
-        UI.showToast(`${ids.length}件を${format.toUpperCase()}でエクスポートしました`, 'success');
+        const count = Storage.exportMultiple(ids, format);
+        // CSV は結果を開けない (壊れた) 保存データを除いて書き出す
+        const skipped = ids.length - count;
+        if (count === 0) {
+            UI.showToast(`選択した項目は壊れているため${format.toUpperCase()}に書き出せません`, 'error');
+            return;
+        }
+        UI.showToast(`${count}件を${format.toUpperCase()}でエクスポートしました` +
+            (skipped > 0 ? `（壊れた${skipped}件は除きました）` : ''), 'success');
     }
 
     /**

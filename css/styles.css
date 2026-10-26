@@ -455,15 +455,9 @@ body {
 
 /*
  * 適正範囲の目安。目盛りは -60〜0 dBFS で、位置 = (dBFS + 60) / 60
- * - -40 dBFS (33.333%) 未満は小さすぎ: インパルス方式が静寂とみなすレベル
- *   (measurement.js の SILENCE_THRESHOLD 0.005 ≈ -46 dBFS) に近く、背景音と区別しにくい
- * - -10 dBFS (83.333%) 超は大きすぎ: メーターは 2048 サンプル窓の RMS で、ピンクTSP の窓内の
- *   ピーク/RMS 比は最大で約 8.5 dB。-10 dBFS 以下ならピークがクリッピング判定
- *   (pink-tsp.js の CLIP_LEVEL 0.99 ≈ -0.1 dBFS) に届かない
+ * 帯の境界 --level-low / --level-high は、app.js の LEVEL_RANGE (値と根拠) から JS が設定する
  */
 .level-meter {
-  --level-low: 33.333%;
-  --level-high: 83.333%;
   width: 100%;
   height: 24px;
   background:

@@ -180,11 +180,11 @@
             <span>-20 dB</span>
             <span>0 dB</span>
           </div>
-          <!-- 適正範囲の目安 (境界の根拠は styles.css の .level-meter を参照) -->
+          <!-- 適正範囲の目安 (境界の値は app.js の LEVEL_RANGE から入れる。根拠もそこに書いてある) -->
           <ul class="level-legend">
-            <li><span class="level-swatch low"></span>小さすぎ（-40 dB 未満）</li>
-            <li><span class="level-swatch ok"></span>適正（-40〜-10 dB）</li>
-            <li><span class="level-swatch high"></span>大きすぎ・クリッピングの恐れ（-10 dB 超）</li>
+            <li><span class="level-swatch low"></span>小さすぎ（<span data-level-bound="low"></span> dB 未満）</li>
+            <li><span class="level-swatch ok"></span>適正（<span data-level-bound="low"></span>〜<span data-level-bound="high"></span> dB）</li>
+            <li><span class="level-swatch high"></span>大きすぎ・クリッピングの恐れ（<span data-level-bound="high"></span> dB 超）</li>
           </ul>
           <p class="guide-note">
             測定音や手拍子が鳴っている間の目安です。何も鳴らしていないときは、低いほど静かで測定に向いています。
@@ -381,10 +381,10 @@
 
   <!-- ===== ヘルプモーダル (初回表示と❓で共有。概要→準備→測定→結果→用語のステップ表示) ===== -->
   <div id="helpModal" class="modal-overlay">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
       <div class="modal-header">
-        <h2 class="modal-title">📐 ReverbMeter の使い方</h2>
-        <button class="modal-close" aria-label="閉じる">×</button>
+        <h2 id="helpTitle" class="modal-title">📐 ReverbMeter の使い方</h2>
+        <button type="button" class="modal-close" aria-label="閉じる">×</button>
       </div>
       <nav class="guide-step-nav" aria-label="使い方のステップ">
         <button type="button" class="step-chip" data-step="0">1 概要</button>
