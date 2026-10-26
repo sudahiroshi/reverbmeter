@@ -6,6 +6,7 @@
 const App = (() => {
     let currentResult = null;
     let currentSavedId = null; // currentResult を保存した (または開いた) 保存データのID
+    let suggestedName = '';    // 保存欄に入れた測定名の既定値
     let micInitialized = false;
 
     /**
@@ -229,6 +230,7 @@ const App = (() => {
             currentResult = result;
             currentSavedId = null;
             UI.displayResults(result);
+            suggestSaveName(result);
 
             if (result.ir && result.ir.clipped) {
                 UI.showToast('入力がクリッピングしています。音量を下げて再測定してください', 'error');
@@ -333,6 +335,23 @@ const App = (() => {
     }
 
     /**
+     * 保存欄に測定名の既定値 (測定方式 + 測定日時) を入れる
+     * 一覧では日時が別に出て、狭い画面では名前が末尾から省略されるため、方式を先に置く
+     * 利用者が書き換えた名前は残し、空か前回の既定値のままのときだけ入れ替える
+     */
+    function suggestSaveName(result) {
+        const nameInput = document.getElementById('saveName');
+        if (!nameInput) return;
+
+        const current = nameInput.value.trim();
+        if (current && current !== suggestedName) return;
+
+        const method = result.method === 'pink-tsp' ? 'ピンクTSP' : 'インパルス';
+        suggestedName = `${method} ${Storage.formatDate(result.timestamp)}`;
+        nameInput.value = suggestedName;
+    }
+
+    /**
      * 測定結果を保存
      */
     function saveResult() {
@@ -377,6 +396,10 @@ const App = (() => {
         currentSavedId = id;
         currentResult.overall = entry.result.overall;
         currentResult.bands = entry.result.bands;
+
+        // 前の測定結果に入れた既定の名前は、開いた保存データとは別の結果を指すので消す
+        const nameInput = document.getElementById('saveName');
+        if (nameInput && nameInput.value === suggestedName) nameInput.value = '';
 
         UI.displayResults(currentResult);
         UI.switchTab('results');
