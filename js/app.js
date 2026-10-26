@@ -223,6 +223,7 @@ const App = (() => {
      */
     function updateTspEstimate() {
         const el = document.getElementById('tspEstimate');
+        const guideEl = document.getElementById('guideTspTime');
         if (!el) return;
 
         const opts = getTspOptions();
@@ -233,6 +234,7 @@ const App = (() => {
         const total = signalSec * (opts.averages + 2); // 再生は 同期加算回数+2 周期
 
         el.textContent = `約${total.toFixed(1)}秒 (信号長 ${signalSec.toFixed(2)}秒)`;
+        if (guideEl) guideEl.textContent = `約${total.toFixed(1)}秒`;
     }
 
     /**

@@ -240,7 +240,7 @@ const UI = (() => {
         const btnText = measureBtn?.querySelector('.btn-text');
 
         const statusMap = {
-            'idle': { text: '音源（手拍子・風船）を鳴らす準備ができたら開始', icon: '🎤', btnText: '開始', btnClass: '' },
+            'idle': { text: '準備ができたら「開始」を押してください', icon: '🎤', btnText: '開始', btnClass: '' },
             'waiting': { text: '💡 手拍子または風船を割ってください', icon: '👂', btnText: '待機中', btnClass: 'recording' },
             'recording': { text: '🔴 録音中...減衰を検出しています', icon: '⏺', btnText: '録音中', btnClass: 'recording' },
             'tsp-playing': { text: '🔊 ピンクTSPを再生中... 静かにしてください', icon: '📡', btnText: '測定中', btnClass: 'recording' },

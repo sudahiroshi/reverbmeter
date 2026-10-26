@@ -150,13 +150,23 @@
 
       <!-- 測定ボタン -->
       <div class="card">
+        <!-- 測定手順 (data-only の項目は選択中の測定モードでだけ表示する) -->
+        <div class="card-title">🧭 測定の手順</div>
+        <ol class="guide-steps">
+          <li>「開始」を押し、ブラウザにマイクの使用を求められたら「許可」する</li>
+          <li data-only="impulse">「手拍子または風船を割ってください」と表示されたら、マイクから1〜2m離れて1回だけ鳴らす</li>
+          <li data-only="impulse">音が消えるまで動かず静かに待つ（録音と解析は自動で行われます）</li>
+          <li data-only="tsp">スピーカーから測定音が<span id="guideTspTime">数秒</span>鳴ります。鳴り終わるまで動かず静かにする</li>
+          <li>解析が終わると「結果」タブに切り替わります</li>
+        </ol>
+
         <div class="measure-btn-container">
           <button id="measureBtn" class="measure-btn" aria-label="測定開始">
             <span class="btn-icon">🎤</span>
             <span class="btn-text">開始</span>
           </button>
           <div class="measure-status" id="measureStatus">
-            マイクボタンを押して測定を開始
+            準備ができたら「開始」を押してください
           </div>
         </div>
 

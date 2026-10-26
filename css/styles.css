@@ -341,6 +341,17 @@ body {
   cursor: pointer;
 }
 
+.guide-steps {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding-left: 20px;
+  margin-bottom: 20px;
+}
+
+.guide-steps li {
+  margin-bottom: 4px;
+}
+
 .guide-note {
   font-size: 0.8rem;
   color: var(--text-muted);
