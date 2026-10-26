@@ -137,6 +137,21 @@ const App = (() => {
             });
         });
 
+        // 保存データ一覧の各行の操作 (行は再描画されるため、一覧でまとめて受け取る)
+        document.getElementById('dataList')?.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action]');
+            const row = target?.closest('.data-item');
+            if (!row) return;
+
+            const id = row.dataset.id;
+            switch (target.dataset.action) {
+                case 'view': viewResult(id); break;
+                case 'export-csv': exportSingle(id, 'csv'); break;
+                case 'export-json': exportSingle(id, 'json'); break;
+                case 'delete': deleteSingle(id); break;
+            }
+        });
+
         // 選択削除ボタン
         document.getElementById('deleteSelectedBtn')?.addEventListener('click', deleteSelected);
 

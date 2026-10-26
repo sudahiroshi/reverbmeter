@@ -573,16 +573,22 @@ const UI = (() => {
 
         if (emptyEl) emptyEl.style.display = 'none';
 
-        listEl.innerHTML = data.map(item => {
+        // id は HTML に埋め込まず、要素のプロパティで設定する (id の文字によって属性や onclick の文字列が壊れないように)。
+        // 行の操作は data-action を手がかりに、app.js が #dataList でまとめて受け取る
+        listEl.replaceChildren(...data.map(item => {
+            const id = item.id || '';
+            const li = document.createElement('li');
+            li.className = 'data-item';
+            li.dataset.id = id;
+
             try {
                 const rt60 = item.result && item.result.overall && Number.isFinite(item.result.overall.rt60)
                     ? item.result.overall.rt60.toFixed(3) + 's'
                     : 'N/A';
 
-                return `
-            <li class="data-item" data-id="${item.id}">
-              <input type="checkbox" class="data-checkbox" value="${item.id}" aria-label="選択">
-              <div class="data-item-info" onclick="App.viewResult('${item.id}')">
+                li.innerHTML = `
+              <input type="checkbox" class="data-checkbox" aria-label="選択">
+              <div class="data-item-info" data-action="view">
                 <div class="data-item-name">${escapeHtml(item.name || '名前なし')}</div>
                 <div class="data-item-meta">
                   <span>${Storage.formatDate(item.date)}</span>
@@ -590,28 +596,28 @@ const UI = (() => {
                 </div>
               </div>
               <div class="data-item-actions">
-                <button class="btn-icon-sm" onclick="App.exportSingle('${item.id}', 'csv')" title="CSV出力">📄</button>
-                <button class="btn-icon-sm" onclick="App.exportSingle('${item.id}', 'json')" title="JSON出力">📋</button>
-                <button class="btn-icon-sm delete" onclick="App.deleteSingle('${item.id}')" title="削除">🗑️</button>
+                <button class="btn-icon-sm" data-action="export-csv" title="CSV出力">📄</button>
+                <button class="btn-icon-sm" data-action="export-json" title="JSON出力">📋</button>
+                <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
               </div>
-            </li>
-          `;
+            `;
             } catch (err) {
                 console.warn('データ項目の描画エラー:', item, err);
-                return `
-            <li class="data-item" data-id="${item.id || 'unknown'}">
-              <input type="checkbox" class="data-checkbox" value="${item.id || ''}" aria-label="選択">
+                li.innerHTML = `
+              <input type="checkbox" class="data-checkbox" aria-label="選択">
               <div class="data-item-info">
                 <div class="data-item-name">⚠️ 破損データ</div>
                 <div class="data-item-meta"><span>読み込めません</span></div>
               </div>
               <div class="data-item-actions">
-                <button class="btn-icon-sm delete" onclick="App.deleteSingle('${item.id || ''}')" title="削除">🗑️</button>
+                <button class="btn-icon-sm delete" data-action="delete" title="削除">🗑️</button>
               </div>
-            </li>
-          `;
+            `;
             }
-        }).join('');
+
+            li.querySelector('.data-checkbox').value = id;
+            return li;
+        }));
     }
 
     /**
