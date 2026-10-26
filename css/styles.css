@@ -1326,6 +1326,16 @@ body {
   background: var(--accent-light);
 }
 
+/* --- 対応環境の表示 --- */
+.app-footer {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* --- Responsive --- */
 @media (max-width: 480px) {
   .rt60-summary {
