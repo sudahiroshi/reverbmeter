@@ -138,9 +138,9 @@
         </div>
       </div>
 
-      <!-- 音圧レベルメーター -->
+      <!-- 入力レベルメーター (dBFS。騒音計の音圧レベルではないため「入力レベル」と呼ぶ) -->
       <div class="card">
-        <div class="card-title">📶 音圧レベル</div>
+        <div class="card-title">📶 入力レベル</div>
         <div class="level-meter-container">
           <div class="level-value" id="levelValue">--</div>
           <div class="level-unit">dBFS</div>
@@ -161,6 +161,10 @@
           </ul>
           <p class="guide-note">
             測定音や手拍子が鳴っている間の目安です。何も鳴らしていないときは、低いほど静かで測定に向いています。
+          </p>
+          <p class="guide-note">
+            ※ dBFS はデジタル上の値（最大＝0dB）で、騒音計で測る dB（音圧レベル）とは異なります。
+            <button type="button" class="link-btn" data-help="termDbfs">dBFS とは</button>
           </p>
         </div>
       </div>
@@ -268,6 +272,9 @@
             <canvas id="irDbChart"></canvas>
           </div>
           <div id="irInfo" class="ir-info"></div>
+          <p class="guide-note">
+            <button type="button" class="link-btn" data-help="termDbfs">📖 S/N・入力レベル（dBFS）などの用語の説明</button>
+          </p>
         </div>
 
         <!-- EDCグラフ -->
@@ -518,6 +525,8 @@
               dBFS は、デジタル信号の最大振幅（フルスケール）を 0dB とした大きさで、値は 0 以下になります。
               測定タブのメーターは直近 2048 サンプル（約 0.05 秒）の RMS（実効値）を、
               ピンクTSP方式の結果の「入力レベル」は同期加算した録音 1 周期分の RMS を、dBFS で表しています。
+              <strong>騒音計で測る音圧レベル dB（SPL）とは別のもの</strong>で、同じ音でも端末やマイクの感度、入力の設定によって値が変わります。
+              部屋の騒音の大きさを dB で比べる用途には使えません。
             </dd>
             <dt>クリッピング</dt>
             <dd>
