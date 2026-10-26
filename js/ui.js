@@ -323,13 +323,13 @@ const UI = (() => {
         const validEl = document.getElementById('validValue');
 
         if (rt60El) {
-            rt60El.innerHTML = !isNaN(overall.rt60)
+            rt60El.innerHTML = Number.isFinite(overall.rt60)
                 ? `${overall.rt60.toFixed(3)}<span class="unit">秒</span>`
                 : `N/A`;
         }
 
         if (edtEl) {
-            edtEl.innerHTML = !isNaN(overall.edt)
+            edtEl.innerHTML = Number.isFinite(overall.edt)
                 ? `${overall.edt.toFixed(3)}<span class="unit">秒</span>`
                 : `N/A`;
         }
@@ -492,7 +492,7 @@ const UI = (() => {
 
         listEl.innerHTML = data.map(item => {
             try {
-                const rt60 = item.result && item.result.overall && !isNaN(item.result.overall.rt60)
+                const rt60 = item.result && item.result.overall && Number.isFinite(item.result.overall.rt60)
                     ? item.result.overall.rt60.toFixed(3) + 's'
                     : 'N/A';
 
